@@ -1,10 +1,11 @@
+import os, sys, time
+
 from fabric.api import local, output, parallel
 from qlib.log import LogControl
 from qlib.data.sql import SqlEngine
-
-from Hacker.settings import DB_Handler, redis, DB_PATH
+from Hacker.settings import DB_Handler, redis, DB_PATH, OUTPUT_DIR
 from termcolor import colored
-import os, sys
+
 
 # some shortcut . let it easy.
 J = os.path.join 
@@ -13,6 +14,8 @@ ENV = os.getenv
 # setting log
 LogControl.LOG_LEVEL = LogControl.INFO
 LogControl.LOG_LEVEL |= LogControl.OK
+LogControl.LOG_LEVEL |= LogControl.FAIL
+output.running = False
 
 
 DOC = """
@@ -38,7 +41,7 @@ DOC = """
 
 
 @parallel
-def rlocal(cmd, **options):
+def rlocal(cmd, dir, output, **options):
     """
     @cmd run in local shell
     @**options include:
@@ -46,7 +49,12 @@ def rlocal(cmd, **options):
         captures=False,
 
     """
-    return local(cmd, **options)
+    return local(cmd + ' 1> %s/%s  2> %s/error.log'  % (dir, output, dir), **options)
+
+def rrun(cmd, dir, output, **options):
+    cmd_str = cmd + ' 1> %s/%s  2> %s/error.log'  % (dir, output, dir)
+    LogControl.i(cmd_str)
+    return os.popen(cmd_str, **options)
 
 
 def upload_history(sh='zsh', debug=False):
@@ -247,6 +255,7 @@ def create_multi_templates(debug=False):
                 cmd_args[kv] = colored(cmd_args[kv], attrs=['underline'])
                 v = dinput('%s |[-r: reset parts, default: -r] %d=' % (' '.join(cmd_args), kv), default='-r')
                 if v == '-r':
+                    LogControl.fail("reset")
                     continue
                 mvals[v] = kv
                 st, key, out = create_single_template(cmd_d, debug=debug, **mvals)
@@ -304,5 +313,39 @@ def delete_mode():
             else:
                 continue
 
+def dir_gen():
+    return J(OUTPUT_DIR, time.asctime()[:11].replace(' ', '_'))
 
+
+def execute(cmd, help=False, console=False, **args):
+    t_dir = dir_gen()
+    try:
+        os.makedirs(t_dir)
+    except Exception as e:
+        pass
+    DB_Handler = SqlEngine(database=DB_PATH)
+    cmds = []
+    options = set()
+    for i in DB_Handler.select("templates", 'cmd', 'keys', 'output', group_key=cmd):
+        cmds.append([i[0], i[2]])
+        [ options.add(m) for m in i[1].split()]
+    
+    if help:
+        LogControl.i("need to set options: ", options)
+        for cmd, out in cmds:
+            LogControl.i(cmd, ' -> ', out, txt_color='yellow')
+        return True
+
+    else:
+        for cmd, out in cmds:
+            try:
+                rrun(cmd.format(**args), t_dir, out)
+            except Exception as e:
+                LogControl.err(e,cmd)
+                LogControl.i("need to set options: ", options)
+                continue
+
+        if console:
+            local('sleep 2 && tail -f %s/*' % t_dir)
+            
     

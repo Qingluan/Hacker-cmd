@@ -3,7 +3,7 @@
 from setuptools import setup, find_packages
 
 
-setup(name='Hacker',
+setup(name='hackcmds',
     version='0.1',
     description='a simple way to use mongo db, let db like dict',
     url='https://github.com/Qingluan/.git',
