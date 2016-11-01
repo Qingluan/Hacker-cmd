@@ -5,11 +5,18 @@ import time
 import argparse
 
 from qlib.log import LogControl
+from Hacker.hackerlib import upload_history
+from Hacker.hackerlib import rlocal
+from Hacker.hackerlib import delete_template_in_sqlite_db
+from Hacker.hackerlib import create_multi_templates
+from Hacker.hackerlib import search_comba_cmds, search_cmd
+from Hacker.hackerlib import delete_mode
 
 DOC = """
      this is script for gen account \n--- write by qingluan
+
 """
-LogControl.LOG_LEVEL = LogControl.INFO
+LogControl.LOG_LEVEL = LogControl.INFO 
 LogControl.LOG_LEVEL |= LogControl.OK
 
 
@@ -23,8 +30,8 @@ def args():
     # parser.add_argument("-mt","--mail-type", default='126', help="mail type")
     # parser.add_argument('-doc', "--document", default='account', help="set mongo's document , %s " % colored("default: account", "green", attrs=['bold',]))
     # parser.add_argument("--upload", default=False, action='store_true', help="update mongo db to osc")
-    # parser.add_argument("--load", default=False, action='store_true', help="load db from  osc")
-    # parser.add_argument("-D", "--db", default='local', help="set mongo's db, %s "% colored("default: local", "green", attrs=['bold']) )
+    parser.add_argument("--delete", default=False, action='store_true', help="delete some cmds in DB. [interact mode]")
+    # parser.add_argument("-d", "--db", default='', help="set mongo's db, %s "% colored("default: local", "green", attrs=['bold']) )
     # parser.add_argument("--args", default='', help="args for options")
     # parser.add_argument("--example", default=False, action="store_true", help="example how to use this")
     # parser.add_argument("-m", "--month", default=time.gmtime(time.time()).tm_mon, help="set search month time, default only can search this month")
@@ -32,9 +39,11 @@ def args():
     # parser.add_argument("--raw-text", default=False, action="store_true")
     # parser.add_argument("--setting", default=None, help='add setting items: \n@example: Index acc --setting proxy http=socks5://127.0.0.1:1080 https=socks5://127.0.0.1:1080')
     # parser.add_argument("-A", "--account", default=False, action="store_true", help="reading account info")
-    # parser.add_argument("-sf","--show-file", default=False, action='store_true', help="show files in DB.")
+    parser.add_argument("-lm","--list-multi", default=False, action='store_true', help="show combination cmd in DB.")
     # parser.add_argument("-uf","--upload-file", default=None, help="upload file to DB.")
     # parser.add_argument("-lf","--pull-file", default=None, help="pull file from DB .")
+    parser.add_argument('-st', "--sh", default='zsh', help="set sh's type , default is zsh")
+    parser.add_argument("-v","--verbos", default=False, action='store_true', help="more info.")
     return parser.parse_args()
 
 
@@ -42,21 +51,34 @@ def args():
 
 def main():
     if sys.argv[1][0] != '-':
-        LogControl.ok("some")
+        LogControl.ok("some", txt_color='blue')
         pass
     else:
         ar = args()
-    
+        
         if ar.create:
-            pass
+            create_multi_templates(debug=ar.verbos)
             sys.exit(0)
 
         if ar.update_history:
-            pass
+            upload_history(ar.sh)
             sys.exit(0)
 
         if ar.search:
-            pass
+            res = search_cmd(ar.search)
+            for k in res:
+                LogControl.i(res[k].decode('utf8').strip(), txt_color='green')
+            sys.exit(0)
+
+        if ar.delete:
+            delete_mode()
+            sys.exit(0)
+
+        if ar.list_multi:
+            for k, v in search_comba_cmds():
+                for m in v:
+                    LogControl.i(k,m)
+                break
             sys.exit(0)
 
 

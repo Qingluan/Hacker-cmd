@@ -1,8 +1,8 @@
 from fabric.api import local, output, parallel
 from qlib.log import LogControl
-from qlib.data import GotRedis
+from qlib.data.sql import SqlEngine
 
-from Hacker.settings import DB_Handler
+from Hacker.settings import DB_Handler, redis, DB_PATH
 from termcolor import colored
 import os, sys
 
@@ -55,7 +55,7 @@ def upload_history(sh='zsh', debug=False):
 
     @sh='zsh' / can choose bash
     """
-    redis = GotRedis()
+
     history_file = J(ENV("HOME"), '.%s_history' % sh)
     keys_dict = dict()
     with open(history_file, 'rb') as fp:
@@ -90,7 +90,7 @@ def upload_history(sh='zsh', debug=False):
 
 
             redis(cmd_title, ID, cmd_str)
-            LogControl.ok(cmd_title, end='\r')
+            LogControl.i(cmd_title, end='\r')
             sys.stdout.flush()
     redis.redis.save()
 
@@ -99,7 +99,6 @@ def list_cmd_titles():
     """
     list all cmd keys in redis.
     """
-    redis = GotRedis()
     return redis.keys()
 
 
@@ -107,7 +106,6 @@ def list_cmd():
     """
     list all load in redis's cmd
     """
-    redis = GotRedis()
     cmd_groups = redis.keys()
     for group in cmd_groups:
         LogControl.info(group, '\n\t', redis.redis.hgetall(group))
@@ -117,7 +115,6 @@ def choose_a_cmd_as_template(cmd_name, id_key):
     """
     return a set of cmd in redis's DB.
     """
-    redis = GotRedis()
     return redis.redis.hget(cmd_name, id_key)
 
 
@@ -125,9 +122,9 @@ class CmdMakeException(Exception):
     pass
 
 
-
-def save_template_to_sqlite_db(group_key ,cmd_str, debug=False, **args_map):
+def create_single_template(cmd_str, debug=False, **args_map):
     """
+    create single-cmd templates
     example: 
         @cmd_str:  'ls  some | grep some'
         @args_map: { 'dir':   1} 
@@ -139,8 +136,7 @@ def save_template_to_sqlite_db(group_key ,cmd_str, debug=False, **args_map):
                 keys: 'dir'
             }
     """
-    # check
-    cmd_str = cmd_str.decode('utf-8')
+    cmd_str = cmd_str.decode('utf-8') if isinstance(cmd_str, bytes) else cmd_str
     cmd_args = cmd_str.split()
     for arg in args_map:
         # if cmd_str.find(arg) == -1:
@@ -156,11 +152,27 @@ def save_template_to_sqlite_db(group_key ,cmd_str, debug=False, **args_map):
     replaced_cmd = ' '.join(cmd_args)
     keys = ' '.join(list(args_map.keys()))
     LogControl.info(replaced_cmd, keys, txt_color='white') if debug else ''
-    DB_Handler.insert('templates', ['group_key', 'cmd', 'keys', 'output'], group_key, replaced_cmd, keys, '%s.log' % cmd_args[0])
+    return replaced_cmd, keys, '%s.log' % cmd_args[0]
+
+
+def save_template_to_sqlite_db(group_key, cmd_str, keys, output):
+    
+    """
+    save value to db which from create_template
+    """
+    DB_Handler.insert('templates', ['group_key', 'cmd', 'keys', 'output'], group_key, cmd_str, keys, output)
+    return True
+
+
+def delete_template_in_sqlite_db(group_key):
+    DB_Handler.delete('templates', group_key=group_key)
     return True
 
 
 def dinput(string, default=None):
+    """
+    default input
+    """
     m = input(string)
     if m: 
         return m
@@ -169,7 +181,10 @@ def dinput(string, default=None):
 
 
 def search_cmd(*keys):
-    redis = GotRedis()
+    """
+    search cmd in redis.
+    """
+
     cmd = keys[0]
     if_options = False
     if len(keys) > 1:
@@ -197,34 +212,97 @@ def search_cmd(*keys):
 
 
 
-def create_cmd():
-    redis = GotRedis()
+def create_multi_templates(debug=False):
+    """
+    create a multi-cmd template.
+    """
+    cmd_group_name = dinput("cmd group's name?\n[q: exit]>", default='q')
+    if cmd_group_name == 'q':
+        return False
     while 1:
-        cmd_group_name = dinput("cmd group's name?\n[q: exit]>", default='q')
-        if cmd_group_name == 'q':
+        cmd_t = dinput('which cmd?\n[q :exit]>', default='q').split()
+        if cmd_t[0] == 'q':
             break
+        # print(cmd_t)
+        vals = list(search_cmd(*cmd_t).values())
+        if len(vals) == 0:
+            continue
+
+        if isinstance(vals[0], list) :
+            vals = [i.strip() for i in vals[0]]
+
+        if not vals:
+            continue
+        for i, v in enumerate(vals):
+            LogControl.ok(i, v, txt_color='cyan')
+        cmd_d = vals[int(dinput('choose a ID , (deafult 0)', default=0))]
+
+        k_in = 2
         while 1:
-            cmd_t = dinput('which cmd?\n[q :exit]>', default='q').split()
-            if cmd_t[0] == 'q':
-                break
-            # print(cmd_t)
-            vals = list(search_cmd(*cmd_t).values())
-            for i, v in enumerate(vals):
-                LogControl.ok(i, v, txt_color='cyan')
-            cmd_d = vals[int(dinput('choose a ID , (deafult 0)', default=0))]
-            kv = dinput('\n%s\n[default 1=url] set :' % cmd_d, default='1=url').split()
-
-            # cmd_args = cmd_d.decode('utf8').split()
-            # cmd_args[k] = colored(cmd_args[k], attrs=['underline'])
-            # v = dinput('%s | %d=' % (' '.join(cmd_args), k))
-            print(cmd_d, kv)
-
+            k_in = dinput('\n%s\nchoose parts to replace ,separate by ' ' [default 2] set :' % colored(cmd_d, attrs=['bold']), default='1')
+            k = [int(i) for i in k_in.split()]
+            cmd_args = cmd_d.decode('utf8').split() if isinstance(cmd_d, bytes) else cmd_d.split()
+            mvals = {}
+            for kv in k:
+                cmd_args[kv] = colored(cmd_args[kv], attrs=['underline'])
+                v = dinput('%s |[-r: reset parts, default: -r] %d=' % (' '.join(cmd_args), kv), default='-r')
+                if v == '-r':
+                    continue
+                mvals[v] = kv
+                st, key, out = create_single_template(cmd_d, debug=debug, **mvals)
+                save_template_to_sqlite_db(cmd_group_name, st, key, out)
+            break
 
 
 
-
+def search_comba_cmds(tag=False):
+    """
+    list multi-templates.
+    """
+    DB_Handler = SqlEngine(database=DB_PATH)
+    for key in DB_Handler.select('templates', 'group_key'):
+        if not tag:
+            yield key[0], list(DB_Handler.select('templates', group_key=key[0]))
+        else:
+            if key[0].find(tag) != -1:
+                yield key[0], list(DB_Handler.select('templates', group_key=key[0]))
     
     
+def delete_mode():
+    """
+    delete some cmds.
+    """
+    while 1:
+        c = dinput("[l:list all comba-cmds, q:exit, s:search cmd, d xxx :delete xxx comba cmd] \n>", default='q')
+        if c == 'q':
+            LogControl.i('~ by')
+            break
+        elif c == 'l':
+            for m,res in search_comba_cmds():
+                LogControl.i(m, res)
+        else:
+            if c[0] == 's':
+                cc = ''
+                try:
+                    cc = c.split()[1]
+                except Exception as e:
+                    LogControl.err(e)
+                    continue
+                for m,res in search_comba_cmds(cc):
+                    LogControl.i(m, res)
+
+            elif c[0] == 'd':
+                cc = ''
+                try:
+                    cc = c.split()[1]
+                except Exception as e:
+                    LogControl.err(e)
+                    continue
+
+                delete_template_in_sqlite_db(cc)
+                LogControl.ok("delete it.")
+            else:
+                continue
 
 
     
