@@ -13,6 +13,7 @@ from Hacker.hackerlib import search_comba_cmds, search_cmd
 from Hacker.hackerlib import delete_mode
 from Hacker.hackerlib import execute
 from Hacker.settings import DB_Handler
+from Hacker.settings import init
 
 DOC = """
      This is a script to make a new cmd to execute sub cmds 
@@ -40,7 +41,7 @@ def args():
     # parser.add_argument("--example", default=False, action="store_true", help="example how to use this")
     # parser.add_argument("-m", "--month", default=time.gmtime(time.time()).tm_mon, help="set search month time, default only can search this month")
     # parser.add_argument("-y", "--year", default=time.gmtime(time.time()).tm_year, help="set search year time")
-    # parser.add_argument("--raw-text", default=False, action="store_true")
+    parser.add_argument("--init", default=False, action="store_true", help='init this project .. to create DB.')
     # parser.add_argument("--setting", default=None, help='add setting items: \n@example: Index acc --setting proxy http=socks5://127.0.0.1:1080 https=socks5://127.0.0.1:1080')
     parser.add_argument("-V", "--console", default=False, action="store_true", help="if see console's log.")
     parser.add_argument("-lm","--list-multi", default=False, action='store_true', help="show combination cmd in DB.")
@@ -76,6 +77,10 @@ def main():
     else:
         ar = args()
         
+        if ar.init:
+            init()
+            sys.exit(0)
+
         if ar.create:
             create_multi_templates(debug=ar.verbos)
             sys.exit(0)
