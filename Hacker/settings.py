@@ -30,3 +30,26 @@ def init():
     if 'templates' not in [ i[0] for i in DB_Handler.table_list()]:
         DB_Handler.create('templates', cmd=str, keys='target', goup_key='comba', output='default.log')
 
+
+MODULES_TEMPLATE = """
+from Hacker.hackerlib import Module
+
+
+class {module_name}(Module):
+
+    def init_args(self):
+        return <--|
+            "path": "set a root path to detect code.",
+        |-->
+
+    def init_payload(self, **kargs):
+        \"\"\"
+        \"\"\"
+        self.options.update(kargs)
+        self.payloads = self.get_res("payload")
+        self.options['shell'] = '{exp} \"<--|payload|-->\" ' #exam: "egrep -Inr  <--|payload|--> <--|path|-->"
+
+    def run(self, options_and_payload, **kargs):
+        sh = self.options['shell']
+        return self.shell(sh.format(**options_and_payload), **kargs)
+"""

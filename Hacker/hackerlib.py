@@ -1,10 +1,13 @@
 import os, sys, time
+from subprocess import getstatusoutput
+from string import digits
 
 from fabric.api import local, output, parallel
 from qlib.log import LogControl
 from qlib.data.sql import SqlEngine
 from Hacker.settings import DB_Handler, redis, DB_PATH, OUTPUT_DIR
 from termcolor import colored
+
 
 
 # some shortcut . let it easy.
@@ -346,6 +349,224 @@ def execute(cmd, help=False, console=False, **args):
                 continue
 
         if console:
-            local('sleep 2 && tail -f %s/*' % t_dir)
+            try:
+                local('sleep 2 && tail -f %s/*' % t_dir)
+            except KeyboardInterrupt as e:
+                LogControl.info("~bye")
+
+
+def check_cmd(cmd_name):
+    """
+    check some cmd if exists
+    """
+    sta, _ = getstatusoutput(cmd_name + " -h")
+    if sta == 0:
+        return True
+    return False
+
+def str_auto(value):
+    if not isinstance(value, str):
+        raise TypeError("must a str type")
+
+    if value.lower() is 'true':
+        return True
+    elif value.lower() is 'false':
+        return False
+    elif value.lower() in ('none', 'null', 'nil'):
+        return None
+    elif value in digits:
+        return int(value)
+    else:
+        return value
+
+
+class ExpDBHandler:
+    """
+        can ues functions:
             
-    
+            get(*args, **kargs)
+            to_db(*values)
+
+        can use args:
+            self.table
+            self.db
+            self.columns
+
+    """
+
+    def __init__(self, table_name):
+        self.table = table_name
+        self.db = SqlEngine(database=DB_PATH)
+        if not (table_name,) in self.db.table_list():
+            ex_values = {}
+            while 1:
+                name = dinput("[q or None exit] name>", None)
+                if name in ['q', None]:
+                    break
+                value = dinput("\r[q or None exit] value>", None)
+                if  value in ['q', None]:
+                    break
+                if value is "int":
+                    ex_values[name] = int
+                elif value is 'str':
+                    ex_values[name] = str
+                elif value is "time":
+                    ex_values[name] = time
+                elif value in digits:
+                    ex_values[name] = int(value)
+                else:
+                    ex_values[name] = value
+                
+            self.db.create(table_name, payload='some payload',**ex_values)
+        self.columns = tuple([i[0] for i in self.db.check_table(self.table)][2:])
+
+    def get(self, *columns, **kargs):
+        for item in self.db.select(self.table, *columns, **kargs):
+            yield item
+
+    def to_db(self, *value):
+        try:
+            self.db.insert(self.table, self.columns, *value)
+        except Exception as e:
+            return False
+        else:
+            return True
+
+
+class Module(ExpDBHandler):
+    """
+    this can be inherit to immplement kinds of moduls
+        table_name will get by sub Class's name.
+        add_res(str) : will addsources to DB,
+                can supported file and str
+                    str: "sss,sss,sss,ss" # add single item to db
+                    file: "some.tet" # add multi-item to db from csv file with seprated by ','
+
+
+    """
+    def __init__(self):
+        self.payloads = None
+        self.module_name = self.__class__.__name__
+        self.options = {
+            'Module_name': self.module_name,
+            'asyn':False
+        }
+        super().__init__(self.module_name)
+
+    def init_payload(self):
+        raise NotImplementedError("Must init arg : self.payload , self.options")
+
+    def init_args(self):
+        """
+        mark all options, which is optional
+            {
+                'some': False,
+                'path': True
+            }
+        """
+        raise NotImplementedError("Must init arg : self.payload , self.options")        
+
+    def add_res(self, string_values):
+        """
+        add resource to db.
+                    can supported file and str
+                    str: "sss,sss,sss,ss" # add single item to db
+                    file: "some.tet" # add multi-item to db from csv file with seprated by ','
+
+        """
+        if os.path.exists(string_values):
+            with open (string_values) as sources:
+                for line in sources:
+                    val = [str_auto(i) for i in string_values.strip().split(",")]
+                    self.to_db(*val)
+        else:
+            val = [str_auto(i) for i in string_values.split(",")]
+            self.to_db(*val)
+
+    def get_res(self, *columns, num=None, grep='', **condition):
+        co = 0
+        for item in self.get(*columns, **condition):
+            co += 1
+            if num is not None and co > num:
+                break
+            
+            if str(item).find(grep) != -1:
+                yield item
+
+    def del_res(self):
+
+        """
+        delete some cmds.
+        """
+        while 1:
+            c = dinput("[l:list all res, q:exit, s:search cmd, d xxx :delete xxx comba cmd] \n>", default='q')
+            if c == 'q':
+                LogControl.i('~ by')
+                break
+            elif c == 'l':
+                for res in self.get_res():
+                    LogControl.i(res[0], res[1:])
+            else:
+                if c[0] == 's':
+                    cc = ''
+                    try:
+                        cc = c.split()[1]
+                    except Exception as e:
+                        LogControl.err(e)
+                        continue
+                    for res in self.get_res(grep=cc):
+                        LogControl.i(res[0], res[1:])
+
+                elif c[0] == 'd':
+                    cc = ''
+                    try:
+                        cc = c.split()[1]
+                    except Exception as e:
+                        LogControl.err(e)
+                        continue
+
+                    self.db.delete(self.table, id=cc)
+                    LogControl.ok("delete it.")
+                else:
+                    continue
+
+    def shell(self, cmd_str, out=False, console=True):
+        """
+        @cmd_str
+        @out=False
+        @console=True
+        @self.options['asyn'] = False 
+
+        if set True will use popen no log but can see it in "/tmp/xxx.log"
+        if console set False:
+            no print
+        if out set True:
+            return res
+        """
+        if self.options['asyn']:
+            rrun(cmd_str, "/tmp", cmd_str.split()[0])
+            return 
+
+        sta, res = getstatusoutput(cmd_str)
+        if sta == 0:
+            for line in res.split("\n"):
+                LogControl.ok(line)
+        else:
+            LogControl.err(res)
+
+        if out:
+            return res
+
+    def run(self, options_and_payload, **kargs):
+        """
+        options and payload will combined to one , then pass to run
+        """
+        raise NotImplementedError("no run imm")
+
+    def ex(self):
+        for payload in self.payloads:
+            self.options['payload'] = payload
+            self.run(self.options)
+
+
+

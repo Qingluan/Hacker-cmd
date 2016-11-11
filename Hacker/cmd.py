@@ -4,27 +4,90 @@ import sys
 import time
 import argparse
 
+from importlib import import_module, util
+
 from qlib.log import LogControl
+from termcolor import colored
 from Hacker.hackerlib import upload_history
 from Hacker.hackerlib import rlocal
 from Hacker.hackerlib import delete_template_in_sqlite_db
 from Hacker.hackerlib import create_multi_templates
 from Hacker.hackerlib import search_comba_cmds, search_cmd
 from Hacker.hackerlib import delete_mode
-from Hacker.hackerlib import execute
+from Hacker.hackerlib import execute, dinput
 from Hacker.settings import DB_Handler
-from Hacker.settings import init
+from Hacker.settings import init, MODULES_TEMPLATE
+from Hacker.settings import J
 
 DOC = """
-     This is a script to make a new cmd to execute sub cmds 
-      example:  -c to make a cmd 'scan url=xxx' which include  'whois {url}' 'host {url}'
+     This is a script to make a new cmd to execute sub cmds , or run Modules.
+
+     # will run Module first , then if no Module found will run cmds_comb
+     
+     example:  -c to make a cmd 'scan url=xxx' which include  'whois {url}' 'host {url}'
      \n--- write by qingluan
 
 """
 LogControl.LOG_LEVEL = LogControl.INFO 
 LogControl.LOG_LEVEL |= LogControl.OK
+LogControl.LOG_LEVEL |= LogControl.FAIL
 
 
+def get_modules(name):
+    """
+    this function to load modules
+    """
+    LogControl.i("load module ", colored(name, "green"), end='')
+    try:
+        m = import_module("Hacker.%s" % name, "Hackers")
+        if m:
+            LogControl.ok()
+            return getattr(m, name)
+    except ImportError as e:
+        LogControl.fail()
+        return False
+
+def RunModule(name, new_res=None, D=False, help=False, **kargs):
+    """
+    this function to ex modules
+    @new_res: to add new item , can use str or file_path
+    @D: delete mode to rm or list some data in DB.
+    @help: can see detail info for this Module.
+    """
+    m = get_modules(name)
+    if m:
+        try:
+            instance = m()
+            if new_res:
+                # add res to Module's DB
+                instance.add_res(new_res)
+            elif D:
+                instance.del_res()
+            elif help:
+                help_dict = instance.init_args()
+                for k in help_dict:
+                    LogControl.i("%10s %20s \n\t\t\t%s" % (k, ' ',help_dict[k]))
+
+            else:
+                # to run Module
+                instance.init_payload(**kargs)
+                instance.ex()
+        finally:
+            return True
+    else:
+        return None
+
+
+def AddModule(name):
+    """
+    this function to add a new Module
+    """
+    # get module's path
+    module_path = list(util.find_spec("Hacker").submodule_search_locations).pop()
+    with open(J(module_path,'%s.py' % name) , "w") as m_fp:
+        exp = dinput("if run as shell type , shell cmd\nlike 'egrep -Inr' 'ping -f 10' \n>> ",'')
+        res = MODULES_TEMPLATE.format(module_name=name, exp=exp).replace("<--|", "{").replace("|-->", "}")
+        m_fp.write(res)
 
 def args():
     parser = argparse.ArgumentParser(usage=" how to use this", description=DOC)
@@ -46,7 +109,7 @@ def args():
     parser.add_argument("-V", "--console", default=False, action="store_true", help="if see console's log.")
     parser.add_argument("-lm","--list-multi", default=False, action='store_true', help="show combination cmd in DB.")
     # parser.add_argument("-uf","--upload-file", default=None, help="upload file to DB.")
-    # parser.add_argument("-lf","--pull-file", default=None, help="pull file from DB .")
+    parser.add_argument("-A","--add-module", default=None, help="add a hacker module code .")
     parser.add_argument('-st', "--sh", default='zsh', help="set sh's type , default is zsh")
     parser.add_argument("-v","--verbos", default=False, action='store_true', help="more info.")
     return parser.parse_args()
@@ -63,6 +126,11 @@ def main():
             if '=' in arg:
                 v = arg.split('=')
                 kargs[v[0]] = v[1]
+                if v[1].lower() is 'false':
+                    kargs[v[0]] = False
+                elif v[1].lower() is 'true':
+                    kargs[v[0]] = True
+
             elif '-h' == arg:
                 print("Usage: ", cmd_args[0])
                 execute(cmd_args[0], help=True)
@@ -70,8 +138,9 @@ def main():
             elif arg == '-v':
                 console = True
         print(kargs)
-        execute(cmd_args[0], console=True, **kargs)
-        
+        # will run Module first , then if no Module found will run cmds_comb
+        if not RunModule(cmd_args[0], **kargs):
+            execute(cmd_args[0], console=True, **kargs)
 
         
     else:
@@ -79,6 +148,10 @@ def main():
         
         if ar.init:
             init()
+            sys.exit(0)
+
+        if ar.add_module:
+            AddModule(ar.add_module)
             sys.exit(0)
 
         if ar.create:
