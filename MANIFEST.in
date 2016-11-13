@@ -1,0 +1,6 @@
+
+include README.md
+
+include Hacker/res/U/*.txt
+include Hacker/res/*.ini
+

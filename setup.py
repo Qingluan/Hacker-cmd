@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 
 setup(name='hackcmds',
-    version='0.1',
+    version='1.1',
     description='a simple way to use mongo db, let db like dict',
     url='https://github.com/Qingluan/.git',
     author='Qing luan',
@@ -13,8 +13,9 @@ setup(name='hackcmds',
     zip_safe=False,
     packages=find_packages(),
     install_requires=['Mroylib'],
+    include_package_data=True,
     entry_points={
-        'console_scripts': ['Hacker=Hacker.cmd:main']
+        'console_scripts': ['Hacker=Hacker.libs.cmd:main']
     },
 
 )

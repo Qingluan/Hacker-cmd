@@ -1,13 +1,15 @@
 import os, sys, time
+import argparse
 from subprocess import getstatusoutput
 from string import digits
+from functools import partial
 
-from fabric.api import local, output, parallel
+from termcolor import colored
 from qlib.log import LogControl
 from qlib.data.sql import SqlEngine
-from Hacker.settings import DB_Handler, redis, DB_PATH, OUTPUT_DIR
-from termcolor import colored
-
+from qlib.net import to
+from qlib.asyn import Exe
+from Hacker.ini.settings import DB_Handler, redis, DB_PATH, OUTPUT_DIR, MODULE_PATH
 
 
 # some shortcut . let it easy.
@@ -18,7 +20,6 @@ ENV = os.getenv
 LogControl.LOG_LEVEL = LogControl.INFO
 LogControl.LOG_LEVEL |= LogControl.OK
 LogControl.LOG_LEVEL |= LogControl.FAIL
-output.running = False
 
 
 DOC = """
@@ -43,17 +44,17 @@ DOC = """
 
 
 
-@parallel
-def rlocal(cmd, dir, output, **options):
-    """
-    @cmd run in local shell
-    @**options include:
-        shell=False,
-        captures=False,
-
-    """
-    return local(cmd + ' 1> %s/%s  2> %s/error.log'  % (dir, output, dir), **options)
-
+#@parallel
+#def rlocal(cmd, dir, output, **options):
+#    """
+#    @cmd run in local shell
+#    @**options include:
+#        shell=False,
+#        captures=False,
+#
+#    """
+#    return local(cmd + ' 1> %s/%s  2> %s/error.log'  % (dir, output, dir), **options)
+#
 def rrun(cmd, dir, output, **options):
     cmd_str = cmd + ' 1> %s/%s  2> %s/error.log'  % (dir, output, dir)
     LogControl.i(cmd_str)
@@ -321,6 +322,7 @@ def dir_gen():
 
 
 def execute(cmd, help=False, console=False, **args):
+    LogControl.ok('\n')
     t_dir = dir_gen()
     try:
         os.makedirs(t_dir)
@@ -350,7 +352,7 @@ def execute(cmd, help=False, console=False, **args):
 
         if console:
             try:
-                local('sleep 2 && tail -f %s/*' % t_dir)
+                os.system('sleep 2 && tail -f %s/*' % t_dir)
             except KeyboardInterrupt as e:
                 LogControl.info("~bye")
 
@@ -447,10 +449,16 @@ class Module(ExpDBHandler):
     def __init__(self):
         self.payloads = None
         self.module_name = self.__class__.__name__
+        self.exe = None # init when you set thread's num >1 
         self.options = {
             'Module_name': self.module_name,
-            'asyn':False
+            'asyn':False,
+            'thread': 1,
         }
+        # set GET and POST
+        self.GET = to
+        self.POST = partial(to, method='post')
+
         super().__init__(self.module_name)
 
     def init_payload(self):
@@ -466,6 +474,30 @@ class Module(ExpDBHandler):
         """
         raise NotImplementedError("Must init arg : self.payload , self.options")        
 
+    def GET(self, url, headers=None, **kargs):
+        if headers:
+            res = to(url, headers=headers, **kargs)
+        else:
+            res = to(url **kargs)
+        return res.status_code, res
+
+    def PSOT(self,url ,headers=None, **data):
+        if header:
+            res = to(url, data=data, method='post', headers=headers)
+        else:
+            res = to(url, data=data, method='post')
+        return res.status_code, res
+
+    def Asyn(self,f, *args, **kargs):
+        self.exe.done(f, self.done, *args, **kargs)
+
+    def done(self):
+        """
+        this is function will got result of threads' functions
+        """
+        raise NotADirectoryError("this is a function must immplement .")
+
+
     def add_res(self, string_values):
         """
         add resource to db.
@@ -475,9 +507,9 @@ class Module(ExpDBHandler):
 
         """
         if os.path.exists(string_values):
-            with open (string_values) as sources:
+            with open (string_values, 'rb') as sources:
                 for line in sources:
-                    val = [str_auto(i) for i in string_values.strip().split(",")]
+                    val = [str_auto(i) for i in line.decode('utf8', 'ignore').strip().split(",")]
                     self.to_db(*val)
         else:
             val = [str_auto(i) for i in string_values.split(",")]
@@ -552,7 +584,7 @@ class Module(ExpDBHandler):
             for line in res.split("\n"):
                 LogControl.ok(line)
         else:
-            LogControl.err(res)
+            LogControl.err(res, cmd_str)
 
         if out:
             return res
@@ -563,10 +595,83 @@ class Module(ExpDBHandler):
         """
         raise NotImplementedError("no run imm")
 
+    def parser(self, **options):
+        """
+        options how to run.
+        """
+        raise NotImplementedError("no run imm")
+
     def ex(self):
+        # print(self.options)
+        if self.options['Editor']:
+            os.system("vi %s" % J(MODULE_PATH, self.module_name + '.py'))
+            raise SystemExit("0")
+
+        if self.options['thread'] > 1:
+            self.exe = Exe(self.options['thread'])
+
+            LogControl.i('thread: %d' % self.options['thread'], txt_color='blue')
+
+        if self.options['add_data']:
+            self.add_res(self.options['add_data'])
+            raise SystemExit("0")
+
+        if self.options['delete_data']:
+            self.del_res()
+            raise SystemExit("0")        
+
+        self.parser()
+
         for payload in self.payloads:
             self.options['payload'] = payload
+            LogControl.i("load payload: ", colored(payload, attrs=['underline', 'bold']) , txt_color="blue",end="\r")
             self.run(self.options)
 
 
+def GeneratorApi(module_instance):
+    # sys.argv.pop[0]
+
+    kargs = module_instance.init_args()
+    doc = kargs.pop('doc')
+    upcase = set([ i for i in 'QWERTYUIOPASDFGHJKLZXCVBNM'])
+    # print(doc)
+    parser = argparse.ArgumentParser(usage=module_instance.module_name, description=doc)
+    parser.add_argument("-T", "--thread", default=1, type=int, help="add some new data to module's DB")
+    parser.add_argument("--Editor", default=False, action='store_true', help="edit this module")
+    parser.add_argument("-ad", "--add-data", default=None, help="add some new data to module's DB")
+    parser.add_argument("-dd", "--delete-data", default=False, action='store_true', help="delte some data to module's DB")
+
+    for key in kargs:
+        key_set = set([i for i in key])
+        val = kargs[key]
+        pk = []
+        pko = {}
+
+        if key.endswith('*'):
+            pko['nargs'] = '*'
+            key = key[:-1]
+
+        # key area
+        if  (key_set & upcase) == key_set:
+            pk.append(key.lower())
+        elif key[0] in key_set:
+            pk += ['-%s' % key[0].lower() , '--%s' % key]
+        else:
+            pk.append(key)
+
+        # val area
+        if isinstance(val, str):
+            pko['default'] = None
+            pko['help'] = val
+        elif isinstance(val, tuple):
+            pko['default'] = val[0] if isinstance(val[0], bool) else v[1]
+            pko['action'] = ('store_%s' % True if not pko['default'] else 'store_%s' % False).lower()
+            pko['help'] = val[1] if isinstance(val[1], str) else v[0]
+
+        else:
+            LogControl.err(key, val)
+            continue
+        parser.add_argument(*pk, **pko)
+
+    return parser.parse_args()
 
