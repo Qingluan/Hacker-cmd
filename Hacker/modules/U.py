@@ -1,6 +1,7 @@
-
+import os
 from Hacker.libs.hackerlib import Module,J
 from Hacker.libs.hackerlib import LogControl, colored
+from Hacker.ini.settings import RES
 from urllib.parse import urljoin
 
 import requests
@@ -64,7 +65,7 @@ info:
         return {
             "doc": self.__doc__.format(name=colored(self.module_name, "green", attrs=['bold','underline'])),
             "Url": "set a target url",
-            # 't': "set threading",
+            'Type': "set type to check , [php, asp, aspx, cgi, dir , mdb]",
         }
 
     def done(self, code, url):
@@ -84,6 +85,12 @@ info:
         """
         if 'Url' in self.options:
             self.options['u'] = self.options['Url']
+
+    def load_res(self, name):
+        for f in  os.listdir(self.RES_DIR):
+            if f.lower().find(name) != -1:
+                LogControl.title("load file", f)
+                return J(self.RES_DIR, f)
         
 
     def test_url(self, url):
@@ -98,9 +105,20 @@ info:
     def init_payload(self, **kargs):
         """
         """
+
         self.options.update(kargs)
         # self.options['thread'] = self.options['t']
-        self.payloads = [i[0] for i in self.get_res("payload")]
+        # files = [ self.load_res(i[0]) for i in self.get_res("payload", type=self.options['Type'])]
+
+        urls = []
+        files = [self.load_res(name) for name in self.options['Type'].split(",")]
+        for file in files:
+            with open(file, 'rb') as fp:
+                for line in fp:
+                    urls.append(line.decode("utf8","ignore").strip())
+        self.payloads = urls
+
+
         # self.options['shell'] = ' "{payload}" ' #exam: "egrep -Inr  {payload} {path}"
 
     def run(self, options_and_payload, **kargs):
@@ -109,5 +127,5 @@ info:
         p = options_and_payload['payload']
         p = p[1:] if p[0] == '/' else p
         url = J(self.options['u'], p)
-        LogControl.i('\n',url)
+        # LogControl.i('\n',url)
         self.Asyn(self.test_url, url)

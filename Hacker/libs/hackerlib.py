@@ -9,7 +9,8 @@ from qlib.log import LogControl
 from qlib.data.sql import SqlEngine
 from qlib.net import to
 from qlib.asyn import Exe
-from Hacker.ini.settings import DB_Handler, redis, DB_PATH, OUTPUT_DIR, MODULE_PATH
+from qlib.base import SHELL
+from Hacker.ini.settings import DB_Handler, redis, DB_PATH, OUTPUT_DIR, MODULE_PATH, RES
 
 
 # some shortcut . let it easy.
@@ -61,7 +62,7 @@ def rrun(cmd, dir, output, **options):
     return os.popen(cmd_str, **options)
 
 
-def upload_history(sh='zsh', debug=False):
+def upload_history(sh=SHELL, debug=False):
     """
     find cmd in sh's history
 
@@ -77,8 +78,14 @@ def upload_history(sh='zsh', debug=False):
             # filter some unused cmd
             try:
                 # remove prompt and decode as utf-8
-                cmd_str = line.decode('utf8').split(";")[1]
 
+                # zsh
+                if sh == 'zsh':
+                    cmd_str = line.decode('utf8').split(";")[1]
+                # bash
+                else:
+                    cmd_str = line.decode('utf8')
+                    
                 args = cmd_str.split()
 
                 # count cmd
@@ -95,7 +102,7 @@ def upload_history(sh='zsh', debug=False):
                 if cmd_title.find("/") != -1:
                     continue
             except IndexError as e:
-                LogControl.err(e, '\n', '\t', line) if debug else ''
+                LogControl.err(e, '\n', '\t', line)
                 continue
             except UnicodeDecodeError as e:
                 continue
@@ -458,6 +465,7 @@ class Module(ExpDBHandler):
         # set GET and POST
         self.GET = to
         self.POST = partial(to, method='post')
+        self.RES_DIR = J(RES, self.module_name)
 
         super().__init__(self.module_name)
 
@@ -601,6 +609,12 @@ class Module(ExpDBHandler):
         """
         raise NotImplementedError("no run imm")
 
+    def load_res(self, name):
+        for f in  os.listdir(self.RES_DIR):
+            if f.lower().find(name) != -1:
+                LogControl.title("load file", f)
+                return J(self.RES_DIR, f)
+
     def ex(self):
         # print(self.options)
         if self.options['Editor']:
@@ -621,11 +635,14 @@ class Module(ExpDBHandler):
             raise SystemExit("0")        
 
         self.parser()
-
-        for payload in self.payloads:
-            self.options['payload'] = payload
-            LogControl.i("load payload: ", colored(payload, attrs=['underline', 'bold']) , txt_color="blue",end="\r")
-            self.run(self.options)
+        try:
+            for payload in self.payloads:
+                self.options['payload'] = payload
+                LogControl.title("load payload: ", colored(payload, attrs=['underline', 'bold']) , txt_color="blue",end="\r")
+                self.run(self.options)
+        except (KeyboardInterrupt, InterruptedError):
+            LogControl.i("~~bye")
+            raise SystemExit(0)
 
 
 def GeneratorApi(module_instance):

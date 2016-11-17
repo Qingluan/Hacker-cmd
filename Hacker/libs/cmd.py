@@ -8,6 +8,8 @@ from importlib import import_module, util
 
 from qlib.log import LogControl
 from termcolor import colored
+
+import Hacker
 from Hacker.libs.hackerlib import upload_history
 from Hacker.libs.hackerlib import delete_template_in_sqlite_db
 from Hacker.libs.hackerlib import create_multi_templates
@@ -52,7 +54,7 @@ def GetModule(name):
     """
     LogControl.i("load module ", colored(name, "green"), end='')
     try:
-        m = import_module("Hacker.modules.%s" % name, "Hackers")
+        m = import_module("Hacker.modules.%s" % name)
         if m:
             LogControl.ok()
             return getattr(m, name)

@@ -43,6 +43,7 @@ def init():
                     tmp = line.split(",")
                     DB_Handler.insert('modules', ['name', 'direction'], *tmp)
 
+
 MODULES_TEMPLATE = """
 from Hacker.libs.hackerlib import Module, J
 from Hacker.libs.hackerlib import LogControl, colored

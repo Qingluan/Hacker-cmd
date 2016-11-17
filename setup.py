@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 
 setup(name='hackcmds',
-    version='2.1',
+    version='3.7',
     description='a simple way to use mongo db, let db like dict',
     url='https://github.com/Qingluan/.git',
     author='Qing luan',
