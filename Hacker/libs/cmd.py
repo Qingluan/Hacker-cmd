@@ -129,10 +129,10 @@ def args():
     parser = argparse.ArgumentParser(usage=" how to use this", description=DOC)
     parser.add_argument("--init", default=False, action="store_true", help='init this project .. to create DB.')
 
-    parser.add_argument("-cc","--create-cmdcomb", default=False, action='store_true', help="create mode")
+    parser.add_argument("-cc","--create-cmdcomb", default=False, action='store_true', help=colored("create a shortcut.", "red", attrs=['underline']))
     parser.add_argument("-D", "--delete", default=False, action='store_true', help="delete some cmds in DB. [interact mode]")
     parser.add_argument("-s","--search", default=None, help="search cmd from history and db.")
-    parser.add_argument("-uh","--update-history", default=False, action='store_true', help="search cmd from history and db.")
+    parser.add_argument("-uh","--update-history", default=False, action='store_true', help=colored("search cmd from history and db.", "blue", attrs=['underline']))
     parser.add_argument("-lc","--list-cmdcomb", default=False, action='store_true', help="show combination cmd in DB.")
     # parser.add_argument("-mt","--mail-type", default='126', help="mail type")
     # parser.add_argument('-doc', "--document", default='account', help="set mongo's document , %s " % colored("default: account", "green", attrs=['bold',]))
@@ -147,10 +147,10 @@ def args():
     # parser.add_argument("--setting", default=None, help='add setting items: \n@example: Index acc --setting proxy http=socks5://127.0.0.1:1080 https=socks5://127.0.0.1:1080')
     
     
-    parser.add_argument("-S", "--social-database", default=False, action="store_true", help="handle local social database.")
+    parser.add_argument("-S", "--social-database", default=False, action="store_true", help=colored("handle local social database.", "red", attrs=['underline']))
     parser.add_argument("-lm","--list-module", default=False, action='store_true', help="show Modules in DB.")
     parser.add_argument("-um","--update-module", default=False, action='store_true', help="update modules to local.")
-    parser.add_argument("-cm","--create-module", default=None, help="add a hacker module code .")
+    parser.add_argument("-cm","--create-module", default=None, help=colored("create a module python file in PATH/site-packages/Hackers/modules Type: xxxx --Editor can vim it.", "red", attrs=['bold']))
     parser.add_argument("-dm", "--delete-module", default=None, help="delete Module's all db data.")
     parser.add_argument("-dmd", "--delete-module-data", default=None, help="delete Module in py file.")
 
