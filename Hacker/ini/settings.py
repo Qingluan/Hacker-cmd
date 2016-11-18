@@ -22,7 +22,9 @@ if 'templates' not in [ i[0] for i in DB_Handler.table_list()]:
 # ETC_FILE = J('/usr/local/etc/', 'hack.')
 
 OUTPUT_DIR = '/tmp/HackerOutput/'
-RES = J(list(util.find_spec("Hacker").submodule_search_locations).pop(), 'res')
+ROOT_DIR = list(util.find_spec("Hacker").submodule_search_locations).pop()
+RES = J(ROOT_DIR, 'res')
+TEMPLATE_PATH = J(J(ROOT_DIR, 'ini'), 'TEMPLATES.py')
 MODULE_PATH = J(list(util.find_spec("Hacker").submodule_search_locations).pop(), 'modules')
 try:
     os.makedirs(OUTPUT_DIR)

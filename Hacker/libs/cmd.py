@@ -147,7 +147,7 @@ def args():
     # parser.add_argument("--setting", default=None, help='add setting items: \n@example: Index acc --setting proxy http=socks5://127.0.0.1:1080 https=socks5://127.0.0.1:1080')
     
     
-    
+    parser.add_argument("-S", "--social-database", default=False, action="store_true", help="handle local social database.")
     parser.add_argument("-lm","--list-module", default=False, action='store_true', help="show Modules in DB.")
     parser.add_argument("-um","--update-module", default=False, action='store_true', help="update modules to local.")
     parser.add_argument("-cm","--create-module", default=None, help="add a hacker module code .")
@@ -199,6 +199,12 @@ def main():
         
         if ar.init:
             init()
+            sys.exit(0)
+
+        if ar.social_database:
+            from Hacker.libs.socialdatalib import Social
+            s = Social()
+            s.cmdloop()
             sys.exit(0)
 
         if ar.delete_module_data:

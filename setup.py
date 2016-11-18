@@ -4,8 +4,8 @@ from setuptools import setup, find_packages
 
 
 setup(name='hackcmds',
-    version='3.7',
-    description='a simple way to use mongo db, let db like dict',
+    version='3.8',
+    description='add social db',
     url='https://github.com/Qingluan/.git',
     author='Qing luan',
     author_email='darkhackdevil@gmail.com',
