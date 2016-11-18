@@ -70,6 +70,9 @@ class Social(cmd.Cmd):
     def do_clear(self, arg):
         os.system("tput cl")
 
+    def do_vi_setting(self,arg):
+        os.system("vim " + TEMPLATE_PATH)
+
     def do_search(self, name):
         data_tmp = SOCIAL[name]
         tmp = {
