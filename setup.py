@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 
 setup(name='hackcmds',
-    version='3.9',
+    version='4.0',
     description='add social db',
     url='https://github.com/Qingluan/.git',
     author='Qing luan',

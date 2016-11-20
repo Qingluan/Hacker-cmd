@@ -1,19 +1,43 @@
 import re
+from urllib.parse import urljoin, urlencode
+from contextlib import contextmanager
 import bs4
 from bs4 import BeautifulSoup
 from qlib.log import LogControl as L
 from qlib.net import to
 
+__doc__ = """
+      'Analyze' can parse a web html , classfy by different vec.
+   detect the search input form , and search content in html.
+
+"""
 
 BASE_ENCODING = (
         'utf-8',
         'gbk',
     )
 
+@contextmanager
+def show_pro(line, col, sta, text):
+    try:
+        L.save()
+        L.loc(0,0, True)
+        L.i(text, tag = sta, end='\r')
+        yield
+    finally:
+        print('\r')
+        L.load()
+
 
 class BaseWeb:
-    def __init__(self, url, **kargs):
-        self.raw_response = to(url, **kargs)
+    def __init__(self, url, show_process=False, **kargs):
+        if show_process:
+            with show_pro(L.SIZE[0], 0, "Geting", url + str(kargs)):
+                self.raw_response = to(url, **kargs)
+        else:
+            self.raw_response = to(url, **kargs)
+        self.show_process = show_process
+        self.url = url
         self.encoding = self.raw_response.encoding
         try:
             self.content = self.raw_response.content.decode(self.encoding)
@@ -44,20 +68,26 @@ class BaseWeb:
         return self.Soup("a")
 
     def text(self):
-        return self.Soup.body.get_text()
+        
+        return re.sub(r'(\n)+','\n',self.Soup.body.get_text())
 
     def __call__(self, tags, *args, **kargs):
-        return self.Soup(tags, *args, **kargs)
+        return ShowTags(self.Soup(tags, *args, **kargs))
 
 
 class BaseAnalyze(BaseWeb):
+    """
+    base parser a web
+    """
 
     def __init__(self, *args, **kargs):
         super().__init__(*args, **kargs)
         self.smart_remove('link',)
         self.class_ = self.all('class')
         self.id = self.all('id')
-
+        self.links = Links([i.href for i in super().__call__("a") if hasattr(i, "href")])
+        self.forms = Forms(super().__call__("form"))
+        
     def classfy_by_tag(self):
         h = ['h1', 'h2','h3', 'h4', 'h5', 'h6']
         u = 'ul'
@@ -125,7 +155,13 @@ class ShowTag:
 
     def __init__(self, tag):
         self._res = tag
-        self.attrs = self._res.attrs
+        self.attrs = self._res.attrs if hasattr(self._res, 'attrs') else None
+        self.name = tag.name if hasattr(self._res, 'name') else None
+        if self.attrs:
+            for attr in self.attrs:
+                v = self.attrs[attr]
+                if v:
+                    setattr(self, attr, v)
 
     def __repr__(self):
         attrs = self._res.attrs
@@ -163,6 +199,7 @@ class ShowTags:
                     self._res[key] = ShowTag(v)
                 else:
                     self._res[key] = v
+            self.keys = self._res.keys()
 
     def __repr__(self):
         if isinstance(self._res, list):
@@ -183,14 +220,121 @@ class ShowTags:
 
     def __call__(self, *args, **kargs):
         if isinstance(self._res, list):
-            return [ShowTags(i.__call__(*args, **kargs)) for i in self._res]
+            return [i.__call__(*args, **kargs) for i in self._res]
         elif isinstance(self._res, dict):
             for k in self._res:
                 v = self._res[k]
                 if isinstance(v, list):
-                    return [ShowTags(i.__call__(*args, **kargs)) for i in v]
+                    return [i.__call__(*args, **kargs) for i in v]
                 elif isinstance(v, ShowTag):
-                    return ShowTags(v.__call__(*args, **kargs))
+                    return v.__call__(*args, **kargs)
                 else:
                     return None
         
+
+
+                
+class Analyze(BaseAnalyze):
+    """
+    Analyze and handle
+    """
+        
+    def Go(self, id):
+        """
+        can just input a id from self.links get the realurl
+        """
+        link = self.links[id]
+        return Analyze(urljoin(self.url, link), show_process=self.show_process)
+
+    def search(self, search_str, key='search'):
+        link = None
+        form = None
+        for f in self.forms:
+            if f.action.find(key) != -1:
+                link = f.action
+                form = f
+                break
+        if not link:
+            L.err("no search form action be found !")
+            return None
+
+        f_table = {}
+        for name in form.names():
+            f_table[name] = search_str
+        if form.method == 'get':
+            link += "?%s" %  urlencode(f_table)
+            return  Analyze(urljoin(self.url, link), show_process=self.show_process, method=form.method)
+        else:
+            res = to(link, method=form.method, data=f_table)
+            if res.headers['Content-Type'].find("json") != -1:
+                return res.json()
+        
+        
+    def Post(self,form_id, **data):
+        link = self.forms[form_id].action
+        return Analyze(urljoin(self.url, link), show_process=self.show_process, method='post', data=data)
+    
+    def ShowForm(self, form_id):
+        self.forms[form_id].show()
+
+class Form:
+    def __init__(self, form):
+        if not isinstance(form, (ShowTag, bs4.element.Tag,)):
+            raise TypeError("must be form Tag or bs4 Tag")
+        self._res = form
+        self.input = form("input")
+        for attr in form.attrs:
+            v = form.attrs[attr]
+            if v:
+                setattr(self, attr, v)
+
+    def names(self):
+        return [input.name for input in self.input if input.type != 'submit' ]
+
+    def show(self):
+        self.input.__repr__()
+
+    def __repr__(self):
+        self._res.__repr__()
+        return ''
+
+class Forms:
+
+    def __init__(self, forms):
+        self._res = [Form(f) for f in forms]
+
+    def __repr__(self):
+        for i,f in enumerate(self._res):
+            L.i(f.action, tag=i)
+        return ''
+
+    def __getitem__(self, k):
+        return self._res[k]
+        
+        
+class Links:
+    def __init__(self, links):
+        self._res = links
+
+    def __call__(self,search_str):
+        res = {}
+        if isinstance(self._res, list):
+            for i,link in enumerate(self._res):
+                if link.find(search_str) != -1:
+                    res[i] = link
+            return Links(res)
+        elif isinstance(self._res, dict):
+            return Links({ k: self._res[k] for k in self._res if self._res[k].find(search_str) != -1})
+            
+    def __getitem__(self, k):
+        return self._res[k]
+
+    def __repr__(self):
+        if isinstance(self._res, list):
+            for i, v in enumerate(self._res):
+                L.i(v, tag=i)
+        elif isinstance(self._res, dict):
+            for k in self._res:
+                v = self._res[k]
+                L.i(v, tag=k)
+        return ''
