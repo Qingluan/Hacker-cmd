@@ -1,4 +1,5 @@
 import re
+import requests
 from urllib.parse import urljoin, urlencode
 from contextlib import contextmanager
 import bs4
@@ -39,9 +40,15 @@ class BaseWeb:
     def __init__(self, url, show_process=False, **kargs):
         if show_process:
             with show_pro(L.SIZE[0], 0, "Geting", url + " | " + str(kargs)):
-                self.raw_response = to(url, **kargs)
+                if isinstance(url, requests.models.Response):
+                    self.raw_response = url
+                else:
+                    self.raw_response = to(url, **kargs)
         else:
-            self.raw_response = to(url, **kargs)
+            if isinstance(url, requests.models.Response):
+                self.raw_response = url
+            else:
+                self.raw_response = to(url, **kargs)
         self.show_process = show_process
         self.url = self.raw_response.url
         self.encoding = self.raw_response.encoding
@@ -94,7 +101,7 @@ class BaseWeb:
         else:
             sub = self.Soup.body(style.splti())
         # return self.__text_strip__('\n'.join([i._res.get_text() for i in sub if i._res]))
-        return sub
+        return self.__text_strip__('\n'.join([i.get_text() for i in sub]))
 
     def __call__(self, tags, *args, **kargs):
         return ShowTags(self.Soup(tags, *args, **kargs))
@@ -274,6 +281,7 @@ class Analyze(BaseAnalyze):
     def search(self, search_str, key='search'):
         link = None
         form = None
+        method = None
         for f in self.forms:
             if f.action.find(key) != -1:
                 link = f.action
@@ -286,16 +294,24 @@ class Analyze(BaseAnalyze):
                 L.i(v.action, tag=i)
             return None
 
+        method = form.method.lower()
         f_table = {}
         for name in form.names():
             f_table[name] = search_str
-        if form.method == 'get':
+        if method == 'get':
             link += "?%s" %  urlencode(f_table)
-            return  Analyze(urljoin(self.url, link), show_process=self.show_process, method=form.method)
+            return  Analyze(urljoin(self.url, link), show_process=self.show_process, method=method)
         else:
-            res = to(link, method=form.method, data=f_table)
+            res = to(link, method=method, data=f_table)
             if res.headers['Content-Type'].find("json") != -1:
                 return res.json()
+            elif res.headers['Content-Type'].find('ml') != -1:
+                return Analyze(res, show_process=self.show_process)
+            else:
+                L.err("return res is not json or xml", res.headers['Content-Type'])
+                return None
+
+
         
         
     def Post(self,form_id, **data):
