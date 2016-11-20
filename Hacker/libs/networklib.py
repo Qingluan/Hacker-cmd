@@ -38,7 +38,7 @@ def show_pro(line, col, sta, text):
 class BaseWeb:
     def __init__(self, url, show_process=False, **kargs):
         if show_process:
-            with show_pro(L.SIZE[0], 0, "Geting", url + " | " str(kargs)):
+            with show_pro(L.SIZE[0], 0, "Geting", url + " | " + str(kargs)):
                 self.raw_response = to(url, **kargs)
         else:
             self.raw_response = to(url, **kargs)
