@@ -93,7 +93,8 @@ class BaseWeb:
             sub = self.Soup.body([T, U] + H)
         else:
             sub = self.Soup.body(style.splti())
-        return self.__text_strip__(sub.get_text())
+        # return self.__text_strip__('\n'.join([i._res.get_text() for i in sub if i._res]))
+        return sub
 
     def __call__(self, tags, *args, **kargs):
         return ShowTags(self.Soup(tags, *args, **kargs))
