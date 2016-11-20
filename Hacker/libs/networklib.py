@@ -1,6 +1,7 @@
 import re
+import bs4
 from bs4 import BeautifulSoup
-from qlib.log import LogControl
+from qlib.log import LogControl as L
 from qlib.net import to
 
 
@@ -17,7 +18,7 @@ class BaseWeb:
         try:
             self.content = self.raw_response.content.decode(self.encoding)
         except UnicodeDecodeError:
-            LogControl.title(self.encoding + "error", "try another charset")
+            L.title(self.encoding + "error", "try another charset")
             self._decode_raw()
 
         self.content = re.sub(
@@ -63,7 +64,7 @@ class BaseAnalyze(BaseWeb):
         t = 'table'
         form = 'form'
         p = ["p", "li", "article", "code", "i", "b"]
-        return { 
+        return ShowTags({ 
             'h': self.Soup(h),
             'u': self.Soup('ul'),
             't': self.Soup('table'),
@@ -72,7 +73,7 @@ class BaseAnalyze(BaseWeb):
             'i': self.Soup("img"),
             "a": self.Soup("a"),
             "p": self.Soup(p)
-        }
+        })
 
     def all(self, attr):
         attrs = []
@@ -112,9 +113,84 @@ class BaseAnalyze(BaseWeb):
                     i.extract()
         for a in attrs:
             tmp = self.Soup.body(**{attr_t:a})
-            # LogControl.i(tmp)
+            # L.i(tmp)
             if not tmp:
                 continue
 
             res[a] = tmp
-        return res
+        return ShowTags(res)
+
+
+class ShowTag:
+
+    def __init__(self, tag):
+        self._res = tag
+        self.attrs = self._res.attrs
+
+    def __repr__(self):
+        attrs = self._res.attrs
+        attrs.update({"name": self._res.name})
+        for attr in attrs:
+            L.i(attrs[attr], tag=attr)
+        print(" ------------------------------------ ")
+        return ''
+
+    def __call__(self, *args, **kargs):
+        if isinstance(self._res, bs4.element.Tag):
+            return ShowTags(self._res(*args, **kargs))
+        else:
+            L.err("not supported this search function")
+            return None
+
+    def __getitem__(self, key):
+        return self._res.get(key)
+    
+
+class ShowTags:
+
+    def __init__(self, tags):
+        self._res = None
+        if isinstance(tags, list):
+            self._res = [ShowTag(tag) for tag in tags]
+        elif isinstance(tags, dict):
+            self._res = {}
+            for key in tags:
+                v = tags[key]
+                if isinstance(v, list):
+                    v_list = [ShowTag(tag) for tag in v]
+                    self._res[key] = v_list
+                elif isinstance(v, bs4.element.Tag):
+                    self._res[key] = ShowTag(v)
+                else:
+                    self._res[key] = v
+
+    def __repr__(self):
+        if isinstance(self._res, list):
+            for i in self._res:
+                i.__repr__()
+        elif isinstance(self._res, dict):
+            for k in self._res:
+                v = self._res[k]
+                if isinstance(v, list):
+                    for ii in v:
+                        ii.__repr__()
+                else:
+                    v.__repr__()
+        return ''
+
+    def __getitem__(self, key):
+        return self._res[key]
+
+    def __call__(self, *args, **kargs):
+        if isinstance(self._res, list):
+            return [ShowTags(i.__call__(*args, **kargs)) for i in self._res]
+        elif isinstance(self._res, dict):
+            for k in self._res:
+                v = self._res[k]
+                if isinstance(v, list):
+                    return [ShowTags(i.__call__(*args, **kargs)) for i in v]
+                elif isinstance(v, ShowTag):
+                    return ShowTags(v.__call__(*args, **kargs))
+                else:
+                    return None
+        
