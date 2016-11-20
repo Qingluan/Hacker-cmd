@@ -5,7 +5,8 @@ from qlib.data.sql import SqlEngine
 from qlib.log import LogControl
 from qlib.io.console import dict_cmd
 from qlib.io import input_default
-from qlib.file import zip_64, unzip_64
+from qlib.file import file264, b642file
+from qlib.file.pdf import output_to_pdf
 from Hacker.ini.settings import RES, J, TEMPLATE_PATH
 from Hacker.ini.TEMPLATES import SOCIAL
 
@@ -17,7 +18,7 @@ def file_check(dic):
     new_d = {}
     for k in dic:
         if os.path.isfile(dic[k]):
-            new_d[k] = zip_64(dic[k])
+            new_d[k] = '[*b64*][' + dic[k] + ']' + file264(dic[k])
         else:
             new_d[k] = dic[k]
     return new_d
@@ -83,6 +84,8 @@ class Social(cmd.Cmd):
         keys = dict.fromkeys(tmp['set search key'].split(',') if tmp['set search key'].find(",") != -1 else tmp['set search key'].split() )
         keys = dict_cmd(keys)
         cols = input_default("which interesting?\n %s\n>" % ' '.join([colored(i, attrs=['underline']) for i in data_tmp.keys() ]) )
+        if 'all' in cols:
+            cols = ' '.join(list(data_tmp.keys()))
         cols = cols.split(",") if cols.find(",") != -1 else cols.split()
         res = self.db.search(name, *cols, **keys)
         for i in res:
@@ -90,7 +93,44 @@ class Social(cmd.Cmd):
             v = dict(zip(cols, i))
             for k in v:
                 print("\t", end='')
+                v[k] = v[k][:90] + '...' if len(v[k]) > 90 else v[k]
                 LogControl.i(v[k], tag=k, txt_color='yellow')
+
+    def do_list(self, name):
+        data_tmp = SOCIAL[name]
+        cols = list(data_tmp.keys())
+        res = self.db.search(name, *cols)
+
+        for i in res:
+            v = dict(zip(cols, i))
+            for k in v:
+                print("\t", end='')
+                v[k] = v[k][:90] + '...' if len(v[k]) > 90 else v[k]
+                LogControl.i(v[k], tag=k, txt_color='yellow')
+            print( "---------------------")
+
+
+    def export(self, name):
+        tmp = SOCIAL[name]
+        keys = list(tmp.keys())
+        data = self.db.select(name, *keys)
+        for item in data:
+            for i,v in enumerate(item):
+                if v.startswith('[*b64*]'):
+                    v = b642file(v[7:])
+                    r = v.find("]") + 1
+                    v_name = v[1: r-1]
+                    v = v[r:]
+                str_tmp = "%s:  %s" % (keys[i] , v)
+                yield str_tmp
+            yield "--------------------------------------------------------"
+
+    def do_export(self, name):
+        data = self.export(name)
+
+        output = dict_cmd({'output[path to save]': "./pdf.pdf"})
+        fpath = output['output[path to save]']
+        LogControl.title('to',output_to_pdf(data, fpath))
         
 
     def do_quit(self, some):
