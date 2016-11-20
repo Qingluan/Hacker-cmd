@@ -22,7 +22,7 @@ def show_pro(line, col, sta, text):
     try:
         L.save()
         L.loc(0,0, True)
-        L.i(text, tag = sta, end='\r')
+        L.i(text, tag = sta, end='\r', tag_color='green', txt_color='yellow', txt_attr=['underline'])
         yield
     finally:
         print('\r')
@@ -255,7 +255,10 @@ class Analyze(BaseAnalyze):
                 form = f
                 break
         if not link:
-            L.err("no search form action be found !")
+            L.err("no search form action be found !", txt_color='red')
+            L.i('type search("xxx", key="[ here]")' ,tag="only found 'key' :\n")
+            for i,v in enumerate(self.forms):
+                L.i(v, tag=i)
             return None
 
         f_table = {}
