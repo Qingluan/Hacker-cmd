@@ -17,6 +17,12 @@ BASE_ENCODING = (
         'gbk',
     )
 
+H = ['h1', 'h2','h3', 'h4', 'h5', 'h6']
+U = 'ul'
+T = 'table'
+FORM = 'form'
+P = ["p", "li", "article", "code", "i", "b"]
+
 @contextmanager
 def show_pro(line, col, sta, text):
     try:
@@ -32,7 +38,7 @@ def show_pro(line, col, sta, text):
 class BaseWeb:
     def __init__(self, url, show_process=False, **kargs):
         if show_process:
-            with show_pro(L.SIZE[0], 0, "Geting", url + str(kargs)):
+            with show_pro(L.SIZE[0], 0, "Geting", url + " | " str(kargs)):
                 self.raw_response = to(url, **kargs)
         else:
             self.raw_response = to(url, **kargs)
@@ -69,7 +75,25 @@ class BaseWeb:
 
     def text(self):
         
-        return re.sub(r'(\n)+','\n',self.Soup.body.get_text())
+        return self.__text_strip__(self.Soup.body.get_text())
+
+    def __text_strip__(self, t):
+        return re.sub(r'(\n)+','\n',t)
+
+    def format(self, style='list'):
+        """
+        list , table, all
+        """
+        sub = None
+        if style == "list":
+            sub = self.Soup.body(U)
+        elif style == 'table':
+            sub = self.Soup.body([U, T])
+        elif style == 'all':
+            sub = self.Soup.body([T, U] + H)
+        else:
+            sub = self.Soup.body(style.splti())
+        return self.__text_strip__(sub.get_text())
 
     def __call__(self, tags, *args, **kargs):
         return ShowTags(self.Soup(tags, *args, **kargs))
@@ -258,7 +282,7 @@ class Analyze(BaseAnalyze):
             L.err("no search form action be found !", txt_color='red')
             L.i('type search("xxx", key="[ here]")' ,tag="only found 'key' :\n")
             for i,v in enumerate(self.forms):
-                L.i(v, tag=i)
+                L.i(v.action, tag=i)
             return None
 
         f_table = {}

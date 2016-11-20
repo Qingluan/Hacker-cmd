@@ -4,8 +4,8 @@ from setuptools import setup, find_packages
 
 
 setup(name='hackcmds',
-    version='4.0',
-    description='add social db',
+    version='4.1',
+    description='add network analyze class',
     url='https://github.com/Qingluan/.git',
     author='Qing luan',
     author_email='darkhackdevil@gmail.com',
