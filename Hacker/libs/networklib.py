@@ -37,7 +37,7 @@ class BaseWeb:
         else:
             self.raw_response = to(url, **kargs)
         self.show_process = show_process
-        self.url = url
+        self.url = self.raw_response.url
         self.encoding = self.raw_response.encoding
         try:
             self.content = self.raw_response.content.decode(self.encoding)
@@ -287,7 +287,7 @@ class Form:
             v = form.attrs[attr]
             if v:
                 setattr(self, attr, v)
-
+    
     def names(self):
         return [input.name for input in self.input if input.type != 'submit' ]
 
@@ -301,7 +301,7 @@ class Form:
 class Forms:
 
     def __init__(self, forms):
-        self._res = [Form(f) for f in forms]
+        self._res = [Form(f) for f in forms if 'action' in f.attrs]
 
     def __repr__(self):
         for i,f in enumerate(self._res):
