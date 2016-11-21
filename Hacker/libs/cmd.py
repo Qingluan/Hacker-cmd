@@ -17,6 +17,7 @@ from Hacker.libs.hackerlib import search_comba_cmds, search_cmd
 from Hacker.libs.hackerlib import delete_mode
 from Hacker.libs.hackerlib import execute, dinput
 from Hacker.libs.hackerlib import str_auto, GeneratorApi
+from Hacker.libs.networklib import Linkedin, Google
 from Hacker.ini.settings import DB_Handler, DB_PATH
 from Hacker.ini.settings import init, MODULES_TEMPLATE
 from Hacker.ini.settings import J
@@ -144,8 +145,8 @@ def args():
     # parser.add_argument("-m", "--month", default=time.gmtime(time.time()).tm_mon, help="set search month time, default only can search this month")
     # parser.add_argument("-y", "--year", default=time.gmtime(time.time()).tm_year, help="set search year time")
     
-    # parser.add_argument("--setting", default=None, help='add setting items: \n@example: Index acc --setting proxy http=socks5://127.0.0.1:1080 https=socks5://127.0.0.1:1080')
-    
+    parser.add_argument("-l", "--linkedin", default=None, help='search people linkedin')
+    parser.add_argument("-g", "--google", default=None, help='search people google')
     
     parser.add_argument("-S", "--social-database", default=False, action="store_true", help=colored("handle local social database.", "red", attrs=['underline']))
     parser.add_argument("-lm","--list-module", default=False, action='store_true', help="show Modules in DB.")
@@ -199,6 +200,16 @@ def main():
         
         if ar.init:
             init()
+            sys.exit(0)
+
+        if ar.linkedin:
+            l = Linkedin(ar.linkedin)
+            print(l.format())
+            sys.exit(0)
+
+        if ar.google:
+            l = Google(ar.google)
+            print(l.format())
             sys.exit(0)
 
         if ar.social_database:

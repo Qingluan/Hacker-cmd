@@ -6,6 +6,7 @@ import bs4
 from bs4 import BeautifulSoup
 from qlib.log import LogControl as L
 from qlib.net import to
+from qlib.io.console import dict_cmd
 
 __doc__ = """
       'Analyze' can parse a web html , classfy by different vec.
@@ -19,13 +20,13 @@ BASE_ENCODING = (
     )
 
 H = ['h1', 'h2','h3', 'h4', 'h5', 'h6']
-U = 'ul'
+Li = ['ul', 'ol']
 T = 'table'
 FORM = 'form'
 P = ["p", "li", "article", "code", "i", "b"]
 
 @contextmanager
-def show_pro(line, col, sta, text):
+def show_pro(sta, text):
     try:
         L.save()
         L.loc(0,0, True)
@@ -37,18 +38,35 @@ def show_pro(line, col, sta, text):
 
 
 class BaseWeb:
-    def __init__(self, url, show_process=False, **kargs):
+    def __init__(self, url, show_process=True, cookie=True, session=None, **kargs):
+        self.session = session
         if show_process:
-            with show_pro(L.SIZE[0], 0, "Geting", url + " | " + str(kargs)):
+            with show_pro("Geting", url + " | " + str(kargs)):
                 if isinstance(url, requests.models.Response):
                     self.raw_response = url
                 else:
-                    self.raw_response = to(url, **kargs)
+                    if cookie:
+                        if not self.session:
+                            self.session, self.raw_response = to(url, cookie=True, **kargs)
+                        else:
+                            _, self.raw_response = to(url, cookie=True, session=self.session, **kargs)
+                    else:
+                        if self.session:
+                            self.raw_response = to(url, session=self.session, **kargs)
+                        else:
+                            self.raw_response = to(url, **kargs)
         else:
             if isinstance(url, requests.models.Response):
                 self.raw_response = url
             else:
-                self.raw_response = to(url, **kargs)
+                if cookie:
+                    self.session, self.raw_response = to(url, cookie=True, **kargs)
+                else:
+                    if self.session:
+                        self.raw_response = to(url, session=self.session, **kargs)
+                    else:
+                        self.raw_response = to(url, **kargs)
+
         self.show_process = show_process
         self.url = self.raw_response.url
         self.encoding = self.raw_response.encoding
@@ -93,11 +111,11 @@ class BaseWeb:
         """
         sub = None
         if style == "list":
-            sub = self.Soup.body(U)
+            sub = self.Soup.body(Li)
         elif style == 'table':
-            sub = self.Soup.body([U, T])
+            sub = self.Soup.body([T] + Li )
         elif style == 'all':
-            sub = self.Soup.body([T, U] + H)
+            sub = self.Soup.body([T] + H + Li)
         else:
             sub = self.Soup.body(style.splti())
         # return self.__text_strip__('\n'.join([i._res.get_text() for i in sub if i._res]))
@@ -275,18 +293,65 @@ class Analyze(BaseAnalyze):
         """
         can just input a id from self.links get the realurl
         """
-        link = self.links[id]
-        return Analyze(urljoin(self.url, link), show_process=self.show_process)
+        if isinstance(id, str):
+            link = id
+        elif isinstance(id, int):
+            link = self.links[id]
+        else:
+            return None
+
+        return Analyze(urljoin(self.url, link),
+            session=self.session,
+            show_process=self.show_process)
+
+    def login(self, key='login', **data):
+        link = None
+        form = None
+        method = 'post'
+        id = None
+        for i,f in enumerate(self.forms):
+            if f.action.find(key) != -1 and f.method.lower() == 'post':
+                link = f.action
+                form = f
+                id = i
+                break
+
+        if not link:
+            L.err("no search form action be found !", txt_color='red')
+            L.i('type search("xxx", key="[ here]")' ,tag="only found 'key' :\n")
+            for i,v in enumerate(self.forms):
+                L.i(v.action, tag=i)
+            return None
+
+        data = self.form_check(id, data)
+        with show_pro('loging', link):
+            res = to(urljoin(self.url, link),
+                session=self.session,
+                data=data,
+                agent=True,
+                method=method)
+        return Analyze(res)
 
     def search(self, search_str, key='search'):
         link = None
         form = None
         method = None
-        for f in self.forms:
+        id = None
+        for i,f in enumerate(self.forms):
             if f.action.find(key) != -1:
                 link = f.action
                 form = f
+                id = i
                 break
+
+        # find GET form as search form
+        for i,f in enumerate(self.forms):
+            if f.method.lower() == 'get':
+                link = f.action
+                form = f
+                id = i
+                break
+
         if not link:
             L.err("no search form action be found !", txt_color='red')
             L.i('type search("xxx", key="[ here]")' ,tag="only found 'key' :\n")
@@ -298,20 +363,58 @@ class Analyze(BaseAnalyze):
         f_table = {}
         for name in form.names():
             f_table[name] = search_str
+
         if method == 'get':
             link += "?%s" %  urlencode(f_table)
-            return  Analyze(urljoin(self.url, link), show_process=self.show_process, method=method)
+            
+            return  Analyze(urljoin(self.url, link),
+                show_process=self.show_process,
+                session=self.session,
+                method=method)
         else:
-            res = to(link, method=method, data=f_table)
+            res = to(link,
+                method=method,
+                session=self.session,
+                data=f_table)
+
             if res.headers['Content-Type'].find("json") != -1:
                 return res.json()
             elif res.headers['Content-Type'].find('ml') != -1:
-                return Analyze(res, show_process=self.show_process)
+                return Analyze(res,
+                    session=self.session,
+                    show_process=self.show_process)
             else:
                 L.err("return res is not json or xml", res.headers['Content-Type'])
                 return None
 
+    def form_check(self, id, data):
+        form = self.forms[id]
+        i_keys = set(data.keys())
+        t_keys = set(form.names())
+        inputs = form.input
 
+        t_table = { 
+            i.name:i.value 
+                if hasattr(i, 'value') 
+                else None 
+            for i in  inputs
+                if i.type.lower() != 'submit'
+        }
+
+        if i_keys <= t_keys:
+            pass
+        else:
+            L.err("only supported\n", t_table)
+            return None
+        
+        t_table.update(data)
+        need_to_fill = {}
+        for k in t_table:
+            if not t_table[k]:
+                need_to_fill[k] = None
+
+        t_table.update(dict_cmd(need_to_fill))
+        return t_table
         
         
     def Post(self,form_id, **data):
@@ -349,7 +452,7 @@ class Forms:
 
     def __repr__(self):
         for i,f in enumerate(self._res):
-            L.i(f.action, tag=i)
+            L.i(f.action, f.method, tag=i)
         return ''
 
     def __getitem__(self, k):
@@ -382,3 +485,48 @@ class Links:
                 v = self._res[k]
                 L.i(v, tag=k)
         return ''
+
+
+class Google(Analyze):
+    """
+    @keywords can use google's search keywords
+    @proxy must be right. default "socks5://127.0.0.1:1080"
+
+    """
+    BASE_KEYS = {
+        "num":100,
+        "start":0,
+        "meta":"",
+        "hl":"en",
+        "q": None,
+    }
+
+    def __init__(self, keywords, *args, proxy='socks5://127.0.0.1:1080', **kargs):
+        self.google_search_str = keywords
+        self.google_other_keys = kargs
+        self.google_keys = Google.BASE_KEYS
+        self.google_keys['q'] = keywords
+        self.proxy = proxy
+        self.item_now = 0
+        self.google_url = "https://www.google.com/search?"
+        url = self.google_url + urlencode(self.google_keys)
+        super().__init__(url, *args, proxy=proxy, **kargs)
+        self.item_now = 100
+
+    def next_page(self):
+        self.google_keys['start'] = self.item_now
+        url = self.google_url + urlencode(self.google_keys)
+        res = Analyze(url, proxy=self.proxy, **self.google_other_keys)
+        self.item_now += 100
+        return res
+
+
+class Linkedin(Google):
+
+    def __init__(self, key, *args, **kargs):
+        super().__init__("site:linkedin.com/in " + key, *args, **kargs)
+
+
+
+
+

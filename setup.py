@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 
 setup(name='hackcmds',
-    version='4.1',
+    version='4.3',
     description='add network analyze class',
     url='https://github.com/Qingluan/.git',
     author='Qing luan',
