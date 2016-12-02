@@ -147,6 +147,7 @@ def args():
     
     parser.add_argument("-l", "--linkedin", default=None, help='search people linkedin')
     parser.add_argument("-g", "--google", default=None, help='search people google')
+    parser.add_argument("-A", "--args", default=None, help='search args , must used by -g or -l')
     
     parser.add_argument("-S", "--social-database", default=False, action="store_true", help=colored("handle local social database.", "red", attrs=['underline']))
     parser.add_argument("-lm","--list-module", default=False, action='store_true', help="show Modules in DB.")
@@ -204,12 +205,23 @@ def main():
 
         if ar.linkedin:
             l = Linkedin(ar.linkedin)
-            print(l.format())
+            l.parse()
+            if ar.args:
+                for i in l[ar.args]:
+                    i.show()
+            else:
+                l.show()
             sys.exit(0)
 
         if ar.google:
             l = Google(ar.google)
-            print(l.format())
+            # print(l.format())
+            l.parse()
+            if ar.args:
+                for i in l[ar.args]:
+                    i.show()
+            else:
+                l.show()
             sys.exit(0)
 
         if ar.social_database:

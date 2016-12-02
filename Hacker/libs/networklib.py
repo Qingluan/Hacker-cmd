@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*- 
 import re
 import requests
 from urllib.parse import urljoin, urlencode
@@ -35,6 +36,14 @@ def show_pro(sta, text):
     finally:
         print('\r')
         L.load()
+
+def un_recursion(lst):
+    if isinstance(lst, list):
+        for l in lst:
+            yield from un_recursion(l)
+    else:
+        yield lst
+
 
 
 class BaseWeb:
@@ -156,6 +165,14 @@ class BaseAnalyze(BaseWeb):
         })
 
     def all(self, attr):
+        """
+        can see all the attrs sub self tag.
+        like :  self.all("name")
+            # this will get all tags' kind .
+
+                self.all('id')
+            # this will get all the ids sub this tag
+         """
         attrs = []
         for tag in self.Soup(lambda x: x.has_attr(attr)):
             r_tmp = tag.get(attr)
@@ -228,6 +245,43 @@ class ShowTag:
             L.err("not supported this search function")
             return None
 
+    def all(self, attr):
+        """
+        can see all the attrs sub self tag.
+        like :  self.all("name")
+            # this will get all tags' kind .
+
+                self.all('id')
+            # this will get all the ids sub this tag
+         """
+        attrs = []
+        for tag in self(lambda x: hasattr(x,attr)):
+            r_tmp = getattr(tag, attr)
+            if isinstance(r_tmp, list):
+                attrs += r_tmp
+            else:
+                attrs.append(r_tmp)
+
+        s = set(attrs)
+        if '' in s:
+            s.remove('')
+        return s
+
+    def tags(self):
+        return self.all("name")
+
+    def text(self):
+        if hasattr(self._res, "text"):
+            return self._res.text
+
+    def strings(self):
+        if hasattr(self._res, "strings"):
+            return self._res.strings
+
+    def string(self):
+        if hasattr(self._res, "string"):
+            return self._res.string
+
     def __getitem__(self, key):
         return self._res.get(key)
     
@@ -281,6 +335,25 @@ class ShowTags:
                 else:
                     return None
         
+    def text(self):
+        if len(self._res) == 1:
+            return self._res[0].text()
+        else:
+            texts = []
+            for t in self._res:
+                texts.append(t.text())
+            return texts
+
+    def tags(self):
+        
+        if len(self._res) == 1:
+            return self._res[0].tags()
+        else:
+            a = set()
+            for t in self._res:
+                for i in t.tags():
+                    a.add(i)
+            return a
 
 
                 
@@ -337,7 +410,13 @@ class Analyze(BaseAnalyze):
         form = None
         method = None
         id = None
+
+        
+
         for i,f in enumerate(self.forms):
+            if not hasattr(f, 'method'):
+                f.method = 'get' # just for js's search form
+
             if f.action.find(key) != -1:
                 link = f.action
                 form = f
@@ -362,7 +441,11 @@ class Analyze(BaseAnalyze):
         method = form.method.lower()
         f_table = {}
         for name in form.names():
-            f_table[name] = search_str
+            i = form[name]['value']
+            if not i:
+                f_table[name] = search_str
+            else:
+                f_table[name] = i
 
         if method == 'get':
             link += "?%s" %  urlencode(f_table)
@@ -441,6 +524,11 @@ class Form:
     def show(self):
         self.input.__repr__()
 
+    def __getitem__(self, k):
+        for i in self.input:
+            if i.name == k:
+                return i
+
     def __repr__(self):
         self._res.__repr__()
         return ''
@@ -452,7 +540,8 @@ class Forms:
 
     def __repr__(self):
         for i,f in enumerate(self._res):
-            L.i(f.action, f.method, tag=i)
+            m = f.method if hasattr(f, 'method') else 'no method'
+            L.i(f.action, m, tag=i)
         return ''
 
     def __getitem__(self, k):
@@ -501,24 +590,228 @@ class Google(Analyze):
         "q": None,
     }
 
-    def __init__(self, keywords, *args, proxy='socks5://127.0.0.1:1080', **kargs):
+    def __init__(self, keywords, *args, start=0, proxy='socks5://127.0.0.1:1080', **kargs):
         self.google_search_str = keywords
         self.google_other_keys = kargs
         self.google_keys = Google.BASE_KEYS
         self.google_keys['q'] = keywords
         self.proxy = proxy
-        self.item_now = 0
+        self.item_now = start
         self.google_url = "https://www.google.com/search?"
         url = self.google_url + urlencode(self.google_keys)
         super().__init__(url, *args, proxy=proxy, **kargs)
-        self.item_now = 100
+        self.item_now = start + 100
+        self.google_result = list()
+
+    def __getitem__(self, key):
+        """
+        r: mean get result from google_results
+        i: mean get index from set
+        """
+        _r = []
+        for i in self.google_result:
+            r = i[key]
+            if r:
+                _r.append(r)
+        return _r
 
     def next_page(self):
+        """
+        go to next page
+        """
         self.google_keys['start'] = self.item_now
         url = self.google_url + urlencode(self.google_keys)
-        res = Analyze(url, proxy=self.proxy, **self.google_other_keys)
+        res = Google( self.google_search_str, start=self.item_now ,proxy=self.proxy, **self.google_other_keys)
         self.item_now += 100
         return res
+
+    def parse(self):
+        """
+        parse text and images
+        """
+        for res in self("ol")[-1]('div', class_="g"):
+            if res:
+                self.google_result.append(GoogleText(res._res))
+
+    def show(self, start=0, end=None):
+        if not end:
+            _l = self.google_result[start:]
+        else:
+            _l = self.google_result[start: end]
+    
+        for i in _l[::-1]:
+            i.show()
+
+    def stats(self):
+        return self("div", id="resultStats")[0].text()
+
+    def __repr__(self):
+        return self.google_keys['q'] + '|' + self.google_keys['start']
+
+class TextAtomException(TypeError):
+    pass
+
+class TextAtom:
+    """
+    this will parse a single item from a list tags.
+    to find time, img , title, doc, video, link 
+    """
+
+    def  __init__(self, tag):
+        self.title = ''
+        self.link = None
+        self.time = None
+        self.doc = None
+        self.img = None
+        self.video = None
+        self.other_links = None
+        self.attrs = {}
+        self._res = tag
+
+        self._parse_link()
+        self._parse_doc()
+        self._parse_img()
+        self._parse_time()
+        self._parse_title()
+
+    def __getitem__(self, k):
+        """
+        t: type to search:
+            [a, c, t]   # attrs , content , title
+        """
+    
+        if k in self.title:
+            return self
+    
+        for i in un_recursion([list(i.attrs.values()) for i in self._res(True)]):
+            if k in i:
+                return self
+    
+        if k in self._res.text:
+            return self
+    
+        return None
+
+        
+
+    def show(self, t='c'):
+        """
+        t == 'c':
+            show in console
+        t == 'b':
+            show in browser
+        """
+        if t == 'c':
+            L.i(self.link, tag=self.title, txt_color='yellow', txt_attr=['underline'])
+            if self.time:
+                L.i(self.time, tag='T', txt_attr=['bold'])
+            if self.img:
+                L.i(self.img, tag='img')
+            L.i(self.doc, tag='doc', end='\n' + '-'* (L.SIZE[1] -10) +'\n' )
+
+        else:
+            pass
+
+    def _parse_title(self, **kargs):
+        """
+        Principle:
+          if the title is None after parse_link to find h tag.
+        """
+        if not self.title:
+            title_t = self._res(['h1','h2', 'h3', 'h4'])
+            self.title = title_t[0].text
+
+
+    def _parse_link(self, **kargs):
+        """
+        Principle:
+          i declare the first a tag include title and link.
+        """
+
+        links = self._res(lambda x: x and x.name == 'a' and len(x.text) > 2, **kargs)
+        if len(links) >= 1:
+            self.link = links[0]['href']
+            self.title = links[0].text
+
+        if len(links) > 1:
+            self.other_links = ShowTags(links[1:])
+    
+    def _parse_doc(self, tags=['p', 'span', 'article'], **kargs):
+        """
+        Principle:
+          i think the doc's tag  include 'p', 'span', 'b', 'i', 'em', 
+        """
+        doc_t = self._res(tags)
+        if not doc_t:
+            doc_t = self._res(["div","li"])
+
+        self.doc = '\n'.join([i.text for i in doc_t])
+
+    def _parse_img(self):
+        imgs = self._res('img')
+        if imgs:
+            self.img = ShowTags(imgs)
+
+    def _parse_time(self, **kargs):
+        times_t = ''.join([i.text for i in self._res(True)])
+        times_a = ''.join(un_recursion([ list(i.attrs.values()) for i in self._res(True)]))
+        _t = TextTimeAtom(times_a + times_t)
+        if _t.if_find:
+            self.time = _t.txt()
+
+    def __repr__(self):
+        return self.title + '(%s)' % self.__class__.__name__
+
+
+
+class TextTimeAtom:
+    patterns = [
+        r'((?:\d{4})[ \-\/\.年]{1,4}(?:\d{1,2})[\D]{1,4}(?:\d{1,2}))', # baidu.com
+        r'((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\D{1,4}(?:\d{1,2})\D{1,4}(?:\d{4}))', # google.com
+        r'((?:\d{1,2}) hours ago)', # hours ago , google.com
+        r'((?:\d{1,2})小时前)', # hours ago , baidu.com
+    ]
+
+
+    def __init__(self, raw_str):
+        self.if_find = False
+        self._time = []
+
+        self.find(raw_str)
+
+
+    def find(self, strs):
+        self._time = list(set(un_recursion([re.findall(p, strs.lower()) for p in TextTimeAtom.patterns]) ))
+        if self._time:
+            self.if_find = True
+
+    def __getitem__(self, k):
+        return self._time[k]
+
+    def txt(self):
+        return ','.join(self._time)
+
+    def __repr__(self):
+        return self.txt()
+            
+
+            
+            
+
+
+
+class GoogleText(TextAtom):
+
+    def  __init__(self, tag):
+        super().__init__(tag)
+
+        if tag.name == 'div' and 'g' in tag['class']:
+            self._res = tag
+        else:
+            self._res = None
+            L.err("not google text item")
+
+
 
 
 class Linkedin(Google):
