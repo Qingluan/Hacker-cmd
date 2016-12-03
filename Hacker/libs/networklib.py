@@ -668,11 +668,12 @@ class TextAtom:
         self.attrs = {}
         self._res = tag
 
+        self._parse_title()
         self._parse_link()
         self._parse_doc()
         self._parse_img()
         self._parse_time()
-        self._parse_title()
+        
 
     def __getitem__(self, k):
         """
@@ -717,9 +718,9 @@ class TextAtom:
         Principle:
           if the title is None after parse_link to find h tag.
         """
-        if not self.title:
-            title_t = self._res(['h1','h2', 'h3', 'h4'])
-            self.title = title_t[0].text
+        
+        title_t = self._res(['h1','h2', 'h3', 'h4'])
+        self.title = '|'.join([i.text for i in title_t])
 
 
     def _parse_link(self, **kargs):
@@ -731,7 +732,8 @@ class TextAtom:
         links = self._res(lambda x: x and x.name == 'a' and len(x.text) > 2, **kargs)
         if len(links) >= 1:
             self.link = links[0]['href']
-            self.title = links[0].text
+            if not self.title:
+                self.title = links[0].text
 
         if len(links) > 1:
             self.other_links = ShowTags(links[1:])
@@ -811,7 +813,9 @@ class GoogleText(TextAtom):
             self._res = None
             L.err("not google text item")
 
-
+    def _parse_link(self, **kargs):
+        super()._parse_link(**kargs)
+        self.link = self._res('cite')[0].text
 
 
 class Linkedin(Google):

@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 
 setup(name='hackcmds',
-    version='4.4',
+    version='4.5',
     description='add auto analyzer for txt',
     url='https://github.com/Qingluan/.git',
     author='Qing luan',
