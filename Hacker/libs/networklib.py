@@ -20,6 +20,10 @@ BASE_ENCODING = (
         'gbk',
     )
 
+ERR_ENCODING_2_RIGHT = {
+    'iso-8859-1': 'gbk',
+}
+
 H = ['h1', 'h2','h3', 'h4', 'h5', 'h6']
 Li = ['ul', 'ol']
 T = 'table'
@@ -78,7 +82,11 @@ class BaseWeb:
 
         self.show_process = show_process
         self.url = self.raw_response.url
-        self.encoding = self.raw_response.encoding
+        self.encoding = self.raw_response.encoding.lower()
+
+        # check if encoding is iso-8859-1
+        self.encoding = ERR_ENCODING_2_RIGHT.get(self.encoding, self.encoding)
+
         try:
             self.content = self.raw_response.content.decode(self.encoding)
         except UnicodeDecodeError:
@@ -99,7 +107,11 @@ class BaseWeb:
             except UnicodeDecodeError:
                 continue
 
-    def smart_remove(self, *tags,content='script'):
+    def smart_remove(self, *tags, content=['script', 'style']):
+        """
+        @content : remove these tags.
+        @tags: additional tags to remove
+        """
         [i.extract() for i in  self.Soup(content)]
         if tags:
             [i.extract() for i in self.Soup(tags)]
@@ -108,7 +120,6 @@ class BaseWeb:
         return self.Soup("a")
 
     def text(self):
-        
         return self.__text_strip__(self.Soup.body.get_text())
 
     def __text_strip__(self, t):
@@ -360,6 +371,30 @@ class ShowTags:
 class Analyze(BaseAnalyze):
     """
     Analyze and handle
+    @show_process: if show a progress bar .
+    @cookie [bool]
+        can use cookie to scarp cookie , return session, response
+    @proxy
+        proxy={
+            'https': 'socks5://127.0.0.1:1080',
+            'http': 'socks5://127.0.0.1:1080'
+        }
+
+        ... 
+        proxy='socks5://127.0.0.1:1080'
+    @ssl [bool]
+        can trans 'wwwxxx.xxxx' -> 'https://' xxxx
+    @data [dict]
+        post's payload
+    @agent [bool /str]
+        if True:
+            will use random agent from {....} [841]
+        if str:
+            will set User-agent: agent directly
+    @parser [str/None] 'bs4/lxml utf8/gbk'
+        import it as parser.
+    @options:
+        @headners
     """
         
     def Go(self, id):
