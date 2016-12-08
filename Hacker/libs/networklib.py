@@ -152,12 +152,15 @@ class BaseAnalyze(BaseWeb):
 
     def __init__(self, *args, **kargs):
         super().__init__(*args, **kargs)
+        self.css = self.__call__("style", "link")
+        self.script = self.__call__("script")
         self.smart_remove('link',)
         self.class_ = self.all('class')
         self.id = self.all('id')
         self.links = Links([i.href for i in super().__call__("a") if hasattr(i, "href")])
         self.forms = Forms(super().__call__("form"))
-        
+
+
     def classfy_by_tag(self):
         h = ['h1', 'h2','h3', 'h4', 'h5', 'h6']
         u = 'ul'
@@ -315,6 +318,9 @@ class ShowTags:
                 else:
                     self._res[key] = v
             self.keys = self._res.keys()
+
+    def __len__(self):
+        return len(self._res)
 
     def __repr__(self):
         if isinstance(self._res, list):
