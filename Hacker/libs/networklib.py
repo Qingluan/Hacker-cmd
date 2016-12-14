@@ -16,12 +16,12 @@ __doc__ = """
 """
 
 BASE_ENCODING = (
-        'utf-8',
         'gbk',
+        'utf-8',
     )
 
 ERR_ENCODING_2_RIGHT = {
-    'iso-8859-1': 'gbk',
+    'iso-8859-1': 'utf-8',
 }
 
 H = ['h1', 'h2','h3', 'h4', 'h5', 'h6']
@@ -83,29 +83,39 @@ class BaseWeb:
         self.show_process = show_process
         self.url = self.raw_response.url
         self.encoding = self.raw_response.encoding.lower()
+        # L.err(self.encoding)
 
         # check if encoding is iso-8859-1
         self.encoding = ERR_ENCODING_2_RIGHT.get(self.encoding, self.encoding)
 
         try:
             self.content = self.raw_response.content.decode(self.encoding)
-        except UnicodeDecodeError:
-            L.title(self.encoding + "error", "try another charset")
+        except UnicodeDecodeError as e:
+            L.err(e)
+            L.title(self.encoding + "error", "try another charset" )
             self._decode_raw()
+            
+                
 
-        self.content = re.sub(
-                r'(\n)+',
-                '\n',
-                self.content)
+
+        self.content = re.sub(r'(\n)+', '\n', self.content)
         self.Soup = BeautifulSoup(self.content, "html.parser")
 
     def _decode_raw(self):
+        ok = False
         for e in BASE_ENCODING:
             try:
                 self.content = self.raw_response.content.decode(e)
+                ok = True
                 break
             except UnicodeDecodeError:
+                L.title(e, " err")
                 continue
+
+        if not ok:
+            self.content = self.raw_response.content.decode("iso-8859-1")
+            # print(self.raw_response.content)
+    
 
     def smart_remove(self, *tags, content=['script', 'style']):
         """
@@ -670,7 +680,7 @@ class Google(Analyze):
         """
         parse text and images
         """
-        for res in self("ol")[-1]('div', class_="g"):
+        for res in self('div', class_="g"):
             if res:
                 self.google_result.append(GoogleText(res._res))
 
@@ -687,7 +697,7 @@ class Google(Analyze):
         return self("div", id="resultStats")[0].text()
 
     def __repr__(self):
-        return self.google_keys['q'] + '|' + self.google_keys['start']
+        return self.google_keys['q'] + '|' + str(self.google_keys['start'])
 
 class TextAtomException(TypeError):
     pass
@@ -856,7 +866,8 @@ class GoogleText(TextAtom):
 
     def _parse_link(self, **kargs):
         super()._parse_link(**kargs)
-        self.link = self._res('cite')[0].text
+        tmp = self._res('cite')
+        self.link = tmp[0].text if tmp else ''
 
 
 class Linkedin(Google):
