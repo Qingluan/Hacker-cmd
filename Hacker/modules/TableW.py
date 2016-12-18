@@ -47,7 +47,11 @@ class TableW(Module):
         # return self.shell(sh.format(**options_and_payload), **kargs)
         L.i("run in ", options_and_payload["thread"])
         if options_and_payload.get('Local'):
-            t = pandas.DataFrame.from_csv(options_and_payload.get('Local'))
+            try:
+                t = pandas.DataFrame.from_csv(options_and_payload.get('Local'))
+            except UnicodeError:
+                z = Analyze.load(options_and_payload['Local'])
+                t = z.table(options_and_payload["Type"])
         else:
             z = Analyze(options_and_payload['Url'], proxy=options_and_payload["Proxy"])
 

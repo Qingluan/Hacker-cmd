@@ -889,7 +889,10 @@ class TableAtom:
                     yield tr
 
         for i, tr in enumerate(all_lines(self.tables)):
+
             tmp = [ i.strip() for i in tr("td").text()]
+            # if i == 0:
+            #     head = tmp
             
             if not head or l != len(tmp) :
                 head = tmp
@@ -906,11 +909,14 @@ class TableAtom:
 
     @property
     def dict(self):
-        max_c = max(self._meta, key=lambda x: self._meta[x])
+        max_c = max(self._meta, key=lambda x: len(self._meta[x]))
         max_c_c = len(self._meta[max_c])
+        # L.err(max_c, max_c_c, self._meta)
         vals = []
         for k in self._meta[max_c]:
             vals.append(self._res[k])
+        
+        # L.err(vals)
         return pandas.DataFrame(vals, columns=self._head)
 
     @property

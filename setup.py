@@ -4,8 +4,8 @@ from setuptools import setup, find_packages
 
 
 setup(name='hackcmds',
-    version='4.9.1',
-    description='add auto analyzer for txt',
+    version='5.0',
+    description='fix bug, add table scrap',
     url='https://github.com/Qingluan/.git',
     author='Qing luan',
     author_email='darkhackdevil@gmail.com',
