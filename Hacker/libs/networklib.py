@@ -1,9 +1,13 @@
 # -*- coding:utf-8 -*- 
 import re
+import pickle
 import requests
+import copy
 from urllib.parse import urljoin, urlencode
 from contextlib import contextmanager
+
 import bs4
+import pandas
 from bs4 import BeautifulSoup
 from qlib.log import LogControl as L
 from qlib.net import to
@@ -54,7 +58,7 @@ class BaseWeb:
     def __init__(self, url, show_process=True, cookie=True, session=None, **kargs):
         self.session = session
         if show_process:
-            with show_pro("Geting", url + " | " + str(kargs)):
+            with show_pro("Geting", str(url) + " | " + str(kargs)):
                 if isinstance(url, requests.models.Response):
                     self.raw_response = url
                 else:
@@ -100,6 +104,7 @@ class BaseWeb:
 
         self.content = re.sub(r'(\n)+', '\n', self.content)
         self.Soup = BeautifulSoup(self.content, "html.parser")
+        self.Base = copy.copy(self.Soup)
 
     def _decode_raw(self):
         ok = False
@@ -116,6 +121,15 @@ class BaseWeb:
             self.content = self.raw_response.content.decode("iso-8859-1")
             # print(self.raw_response.content)
     
+    def save(self, file):
+        with open(file, "wb") as fp:
+            pickle.dump(self.raw_response, fp)
+
+    @classmethod
+    def load(cls, file):
+        with open(file, 'rb') as fp:
+            data = pickle.load(fp)
+            return cls(data)
 
     def smart_remove(self, *tags, content=['script', 'style']):
         """
@@ -164,7 +178,7 @@ class BaseAnalyze(BaseWeb):
         super().__init__(*args, **kargs)
         self.css = self.__call__("style", "link")
         self.script = self.__call__("script")
-        self.smart_remove('link',)
+        self.smart_remove()
         self.class_ = self.all('class')
         self.id = self.all('id')
         self.links = Links([i.href for i in super().__call__("a") if hasattr(i, "href")])
@@ -558,6 +572,13 @@ class Analyze(BaseAnalyze):
     def ShowForm(self, form_id):
         self.forms[form_id].show()
 
+    def table(self, name="csv"):
+        """
+        supported dict and csv
+        """
+        # L.wrn("check")
+        return getattr(TableAtom(self),  name)
+
 class Form:
     def __init__(self, form):
         if not isinstance(form, (ShowTag, bs4.element.Tag,)):
@@ -848,8 +869,61 @@ class TextTimeAtom:
         return self.txt()
             
 
+class TableAtom:
+
+    def __init__(self, soup):
+        self.tables = soup("table")
+        self._meta = None
+        self._base()
+
+    def _base(self):
+        base = []
+        csv = ""
+        head = []
+        l = 0
+        meta = dict()
+
+        def all_lines(tables):
+            for table in tables:
+                for tr in table("tr"):
+                    yield tr
+
+        for i, tr in enumerate(all_lines(self.tables)):
+            tmp = [ i.strip() for i in tr("td").text()]
             
-            
+            if not head or l != len(tmp) :
+                head = tmp
+            l = len(tmp)
+            ol = meta.get(len(tmp), [])
+            ol.append(i)
+            meta[len(tmp)] = ol
+            csv += ",".join(tmp) + "\n"
+            base.append(tmp)
+        self._res = base
+        self.csv = csv
+        self._head = head
+        self._meta = meta
+
+    @property
+    def dict(self):
+        max_c = max(self._meta, key=lambda x: self._meta[x])
+        max_c_c = len(self._meta[max_c])
+        vals = []
+        for k in self._meta[max_c]:
+            vals.append(self._res[k])
+        return pandas.DataFrame(vals, columns=self._head)
+
+    @property
+    def raw(self):
+        return self._res
+
+    @property
+    def meta(self):
+        return self._meta
+
+    @property
+    def head(self):
+        return self._head
 
 
 
@@ -875,7 +949,4 @@ class Linkedin(Google):
     def __init__(self, key, *args, **kargs):
         super().__init__("site:linkedin.com/in " + key, *args, **kargs)
 
-
-
-
-
+        

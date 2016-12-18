@@ -1,16 +1,17 @@
-import os, sys, time
 import argparse
-from subprocess import getstatusoutput
-from string import digits
+import os, sys, time
+from collections import Iterable
 from functools import partial
+from string import digits
+from subprocess import getstatusoutput
 
-from termcolor import colored
-from qlib.log import LogControl
-from qlib.data.sql import SqlEngine
-from qlib.net import to
+from Hacker.ini.settings import DB_Handler, redis, DB_PATH, OUTPUT_DIR, MODULE_PATH, RES
 from qlib.asyn import Exe
 from qlib.base import SHELL
-from Hacker.ini.settings import DB_Handler, redis, DB_PATH, OUTPUT_DIR, MODULE_PATH, RES
+from qlib.data.sql import SqlEngine
+from qlib.log import LogControl
+from qlib.net import to
+from termcolor import colored
 
 
 # some shortcut . let it easy.
@@ -636,6 +637,13 @@ class Module(ExpDBHandler):
 
         self.parser()
         try:
+
+            if not isinstance(self.payloads, (list, dict, tuple,)):
+                # LogControl.wrn("check here")
+                self.run(self.options)
+                # LogControl.wrn("check here1")
+                raise SystemExit(0)
+
             for payload in self.payloads:
                 self.options['payload'] = payload
                 LogControl.title("load payload: ", colored(payload, attrs=['underline', 'bold']) , txt_color="blue",end="\r")

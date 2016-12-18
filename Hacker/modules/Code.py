@@ -9,7 +9,7 @@ LogControl.LOG_LEVEL |= LogControl.FAIL
 
 class Code(Module):
     """
-{name}
+    {name}
     Code Detect by regex. use shell 'egrep -Inr <payload> <path>'
     """
 
