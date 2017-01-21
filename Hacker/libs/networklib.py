@@ -442,7 +442,7 @@ class Analyze(BaseAnalyze):
             session=self.session,
             show_process=self.show_process)
 
-    def login(self, key='login', **data):
+    def post(self, key,**data):
         link = None
         form = None
         method = 'post'
@@ -469,6 +469,36 @@ class Analyze(BaseAnalyze):
                 agent=True,
                 method=method)
         return Analyze(res, session=self.session)
+
+
+    def login(self, key='login', **data):
+        return self.post(key, **data)
+        # link = None
+        # form = None
+        # method = 'post'
+        # id = None
+        # for i,f in enumerate(self.forms):
+        #     if f.action.find(key) != -1 and f.method.lower() == 'post':
+        #         link = f.action
+        #         form = f
+        #         id = i
+        #         break
+
+        # if not link:
+        #     L.err("no search form action be found !", txt_color='red')
+        #     L.i('type search("xxx", key="[ here]")' ,tag="only found 'key' :\n")
+        #     for i,v in enumerate(self.forms):
+        #         L.i(v.action, tag=i)
+        #     return None
+
+        # data = self.form_check(id, data)
+        # with show_pro('loging', link):
+        #     res = to(urljoin(self.url, link),
+        #         session=self.session,
+        #         data=data,
+        #         agent=True,
+        #         method=method)
+        # return Analyze(res, session=self.session)
 
     def search(self, search_str, key='search'):
         link = None
