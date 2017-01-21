@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 
 setup(name='hackcmds',
-    version='5.0',
+    version='5.1',
     description='fix bug, add table scrap',
     url='https://github.com/Qingluan/.git',
     author='Qing luan',
