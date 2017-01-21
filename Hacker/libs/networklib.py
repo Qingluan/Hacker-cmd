@@ -5,7 +5,7 @@ import requests
 import copy
 from urllib.parse import urljoin, urlencode
 from contextlib import contextmanager
-
+from termcolor import  colored
 import bs4
 import pandas
 from bs4 import BeautifulSoup
@@ -33,6 +33,8 @@ Li = ['ul', 'ol']
 T = 'table'
 FORM = 'form'
 P = ["p", "li", "article", "code", "i", "b"]
+
+
 
 @contextmanager
 def show_pro(sta, text):
@@ -584,7 +586,11 @@ class Analyze(BaseAnalyze):
         else:
             L.err("only supported\n", t_table)
             return None
-        
+        r_ks = []
+        for k in data:
+            if data[k] == "*None*":
+                r_ks.append(k)
+
         t_table.update(data)
         need_to_fill = {}
         for k in t_table:
@@ -592,6 +598,8 @@ class Analyze(BaseAnalyze):
                 need_to_fill[k] = None
 
         t_table.update(dict_cmd(need_to_fill))
+        for k in r_ks:
+            t_table.pop(k)
         return t_table
         
         
