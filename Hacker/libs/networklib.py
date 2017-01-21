@@ -468,7 +468,7 @@ class Analyze(BaseAnalyze):
                 data=data,
                 agent=True,
                 method=method)
-        return Analyze(res)
+        return Analyze(res, session=self.session)
 
     def search(self, search_str, key='search'):
         link = None
